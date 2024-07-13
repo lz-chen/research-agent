@@ -1,7 +1,7 @@
-from web_scraping_agent.utils.scraping import scrape_firecrawl, extract
+from web_scraping_agent.utils.scraping import scrape_firecrawl, scrape_jina_ai
 from llama_index.core.tools import FunctionTool
 from crewai_tools import LlamaIndexTool
-
+from web_scraping_agent.utils.config import settings
 
 # def parse_member_page(client, page_url: str, sys_msg: str, scraper_func: callable = scrape_firecrawl, ):
 #     """
@@ -47,7 +47,12 @@ def crawl_web_page(page_url: str):
     :param page_url: str, the url to scrape
     :return:
     """
-    return scrape_firecrawl(page_url)
+    if settings.CRAWLER == "firecrawl":
+        return scrape_firecrawl(page_url)
+    elif settings.CRAWLER == "jina":
+        return scrape_jina_ai(page_url)
+    else:
+        raise NotImplementedError(f"Crawler {settings.CRAWLER} not implemented")
 
 
 li_scraper_tool = FunctionTool.from_defaults(fn=crawl_web_page)
