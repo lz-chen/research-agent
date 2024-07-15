@@ -14,5 +14,8 @@ class Settings(BaseSettings):
     CRAWLER: Literal['jina', 'firecrawl']
     FIRECRAWL_API_KEY: str
 
+    class Config:
+        env_file = ".env"
+
 
 settings = Settings()
