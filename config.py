@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_GPT4O_MODEL: str
     AZURE_OPENAI_EMBEDDING_MODEL: str
+    MAX_TOKENS: int
 
     LLAMA_CLOUD_API_KEY: str
 

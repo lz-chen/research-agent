@@ -1,15 +1,19 @@
-# bring in deps
+# TODO:
+# - paper 2 pdf should happen before this script
+# - avoid re ingesting nodes to vector store
 import re
 from pathlib import Path
 from typing import Optional
 
 import click
 import qdrant_client
+from llama_index.core.agent import ReActAgent, ReActChatFormatter
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import MarkdownElementNodeParser
 from llama_index.core.node_parser import (
     UnstructuredElementNodeParser,
 )
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
 from llama_index.readers.file import FlatReader, PDFReader
 from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
@@ -18,13 +22,12 @@ from llama_parse import LlamaParse
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core import Settings
 from config import settings
-from prompts import LLAMAPARSE_INSTRUCTION
+from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT_REACT
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
 import sys
-
-# TODO: https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
+from llama_index.core import PromptTemplate
 
 
 logging.basicConfig(
@@ -80,6 +83,7 @@ def setup_index_store(namespace: str, collection_suffix: str):
 
 def paper2md(fname: Path, output_dir: Path, langs: Optional[list] = ["English"], max_pages: Optional[int] = None,
              batch_multiplier: Optional[int] = 1, start_page: Optional[int] = None):
+    # https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
     from marker.convert import convert_single_pdf
     from marker.models import load_all_models
     from marker.output import save_markdown
@@ -127,8 +131,8 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
                                                    index_store=index_store)
 
     index = VectorStoreIndex(
-        nodes=base_nodes + objects,
-        # nodes=base_nodes,
+        # nodes=base_nodes + objects,
+        nodes=base_nodes,
         storage_context=storage_context
     )
     index.set_index_id(collection_name)
@@ -138,14 +142,38 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
     return query_engine
 
 
+def create_agent(file_name: str):
+    logging.info(f"Creating query engine for '{file_name}'")
+    query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
+    logging.info(f"Creating agent for querying '{file_name}'")
+    query_tool = QueryEngineTool(
+        query_engine=query_engine,
+        metadata=ToolMetadata(
+            name=f"index_{fname_to_collection_name(file_name)}",
+            description=(
+                f"This index contains information about paper {file_name}, "
+                "Use a detailed plain text question as input to the tool to query information in the table."
+            ),
+        ),
+    )
+    # chat_formatter = ReActChatFormatter(context=SUMMARIZE_PAPER_PMT)
+    agent = ReActAgent.from_tools([query_tool], llm=llm_gpt4o,
+                                  # react_chat_formatter=chat_formatter,
+                                  max_iterations=30,
+                                  verbose=True)
+    agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(SUMMARIZE_PAPER_PMT_REACT)})
+    agent.chat(f"I want a summary of paper {file_name}")
+
+
 @click.command()
 @click.option("--file_name", "-f", required=True,
               help="Path to the file to parse and create the query engine")
 def main(file_name: str):
-    query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
-    response = query_engine.query("What is the dataset used in this work?")
-    print(response.metadata)
-    print(response.response)
+    create_agent(file_name)
+    # query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
+    # response = query_engine.query("What is the dataset used in this work?")
+    # print(response.metadata)
+    # print(response.response)
 
 
 if __name__ == "__main__":
