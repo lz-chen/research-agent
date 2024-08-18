@@ -2364,6 +2364,51 @@ llama-index-core = ">=0.10.7,<0.11.0"
 llama-parse = ">=0.4.0"
 
 [[package]]
+name = "llama-index-storage-docstore-redis"
+version = "0.1.2"
+description = "llama-index docstore redis integration"
+optional = false
+python-versions = ">=3.8.1,<4.0"
+files = [
+    {file = "llama_index_storage_docstore_redis-0.1.2-py3-none-any.whl", hash = "sha256:bdd19fd63d75ecde5ac97a7dbe3c6889b933b816817ca159b35534aeba42a1ef"},
+    {file = "llama_index_storage_docstore_redis-0.1.2.tar.gz", hash = "sha256:1dc6878d0e6a7b88171c6daf80ab73ac3cd819c6c72fdf7f21c88e9b29376241"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.10.1,<0.11.0"
+llama-index-storage-kvstore-redis = ">=0.1.1,<0.2.0"
+
+[[package]]
+name = "llama-index-storage-index-store-redis"
+version = "0.2.0"
+description = "llama-index index_store redis integration"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+files = [
+    {file = "llama_index_storage_index_store_redis-0.2.0-py3-none-any.whl", hash = "sha256:d50df9eaf036047a4371b0b7becd51649f19a308944a867893d0817cf5817d20"},
+    {file = "llama_index_storage_index_store_redis-0.2.0.tar.gz", hash = "sha256:3ea1bff4acaa5c8e8890c67456be2ff5237a0f59300ab0398dc96ff04c57449f"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.10.61,<0.11.0"
+llama-index-storage-kvstore-redis = ">=0.1.1,<0.2.0"
+
+[[package]]
+name = "llama-index-storage-kvstore-redis"
+version = "0.1.5"
+description = "llama-index kvstore redis integration"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+files = [
+    {file = "llama_index_storage_kvstore_redis-0.1.5-py3-none-any.whl", hash = "sha256:9a27643da4dfaa7cbcfe7d10799afd9e41f4576bc0f3228d279d2e04b76ef5f9"},
+    {file = "llama_index_storage_kvstore_redis-0.1.5.tar.gz", hash = "sha256:697c4ae00d481ec04764748b48b871f70653b29c9c14a818028f3c92d75583f4"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.10.1,<0.11.0"
+redis = ">=5.0.1,<6.0.0"
+
+[[package]]
 name = "llama-index-vector-stores-qdrant"
 version = "0.2.16"
 description = "llama-index vector_stores qdrant integration"
@@ -4439,6 +4484,21 @@ files = [
 full = ["numpy"]
 
 [[package]]
+name = "redis"
+version = "5.0.8"
+description = "Python client for Redis database and key-value store"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "redis-5.0.8-py3-none-any.whl", hash = "sha256:56134ee08ea909106090934adc36f65c9bcbbaecea5b21ba704ba6fb561f8eb4"},
+    {file = "redis-5.0.8.tar.gz", hash = "sha256:0c5b10d387568dfe0698c6fad6615750c24170e548ca2deac10c649d463e9870"},
+]
+
+[package.extras]
+hiredis = ["hiredis (>1.0.0)"]
+ocsp = ["cryptography (>=36.0.1)", "pyopenssl (==20.0.1)", "requests (>=2.26.0)"]
+
+[[package]]
 name = "referencing"
 version = "0.35.1"
 description = "JSON Referencing + Python"
@@ -6395,4 +6455,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "f06c21ffad2530067e5c1e917b348307ad1ded941f93176914286c5b504d7625"
+content-hash = "671323234b9107c5f0d00e27187a4e0972f9b02c03973aa3d16eae9b5eb94921"

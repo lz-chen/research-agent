@@ -1,6 +1,7 @@
 # bring in deps
 import re
 from pathlib import Path
+from typing import Optional
 
 import click
 import qdrant_client
@@ -10,6 +11,8 @@ from llama_index.core.node_parser import (
     UnstructuredElementNodeParser,
 )
 from llama_index.readers.file import FlatReader, PDFReader
+from llama_index.storage.docstore.redis import RedisDocumentStore
+from llama_index.storage.index_store.redis import RedisIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_parse import LlamaParse
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
@@ -21,6 +24,9 @@ from services.embeddings import aoai_embedder
 import logging
 import sys
 
+# TODO: https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
+
+
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
@@ -30,6 +36,10 @@ logging.basicConfig(
 
 Settings.llm = llm_gpt4o
 Settings.embed_model = aoai_embedder
+
+
+def fname_to_collection_name(fname: str):
+    return re.sub(r'\W+', '_', fname.split("/")[-1]).lower()
 
 
 def setup_vector_store(collection_name: str):
@@ -47,57 +57,83 @@ def setup_vector_store(collection_name: str):
     )
 
 
-def parse_and_create_qe(file_name: str, llm: LLM):
+def setup_doc_store(namespace: str):
+    """Set up the MongoDB document store. docstore is used to store the source node data."""
+    return RedisDocumentStore.from_host_and_port(
+        settings.REDIS_HOST,
+        settings.REDIS_PORT,
+        # namespace="SourceDocs",
+        namespace=namespace
+    )
+
+
+def setup_index_store(namespace: str, collection_suffix: str):
+    """Set up the MongoDB index store. index store is used to store the metadata of the index creation."""
+    return RedisIndexStore.from_host_and_port(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        namespace=namespace,
+        # collection_suffix="/index"
+        collection_suffix=collection_suffix
+    )
+
+
+def paper2md(fname: Path, output_dir: Path, langs: Optional[list] = ["English"], max_pages: Optional[int] = None,
+             batch_multiplier: Optional[int] = 1, start_page: Optional[int] = None):
+    from marker.convert import convert_single_pdf
+    from marker.models import load_all_models
+    from marker.output import save_markdown
+    import time
+
+    model_lst = load_all_models()
+    start = time.time()
+    full_text, images, out_meta = convert_single_pdf(fname.as_posix(), model_lst, max_pages=max_pages, langs=langs,
+                                                     batch_multiplier=batch_multiplier, start_page=start_page)
+
+    name = fname.name
+    subfolder_path = save_markdown(output_dir.as_posix(), name, full_text, images, out_meta)
+
+    logging.info(f"Saved markdown to the '{subfolder_path}' folder")
+    logging.debug(f"Total time: {time.time() - start}")
+    return subfolder_path
+
+
+def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
     # use SimpleDirectoryReader to parse our file
-    # file_extractor = {".pdf": parser}
-    documents = SimpleDirectoryReader(input_files=[file_name],
+    md_output_dir = file_name.parents[1]
+    if len(list(md_output_dir.joinpath(file_name.stem).glob("*.md"))) and not force_reparse:
+        logging.info(f"Markdown file already exists for '{file_name}'")
+        md_folder = md_output_dir.joinpath(file_name.stem)
+    else:
+        logging.info(f"Converting '{file_name}' to markdown")
+        md_folder = paper2md(Path(file_name), md_output_dir)
+    documents = SimpleDirectoryReader(input_dir=md_folder,
                                       # file_extractor=file_extractor
+                                      required_exts=[".md"], filename_as_id=True,
                                       ).load_data()
     node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
     # Retrieve nodes (text) and objects (table)
     nodes = node_parser.get_nodes_from_documents(documents)
     base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
 
-    # # use llama parse to parse the file
-    # parser = LlamaParse(
-    #     api_key=settings.LLAMA_CLOUD_API_KEY,
-    #     result_type="markdown",
-    #     parsing_instruction=LLAMAPARSE_INSTRUCTION
-    # )
-    # documents = parser.load_data(file_name)  # each page will become a document
-    # # Parse the documents using MarkdownElementNodeParser
-    # node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
-    # # Retrieve nodes (text) and objects (table)
-    # nodes = node_parser.get_nodes_from_documents(documents)
-    # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
-
-    # # use unsctructured element node parser to parse the file
-    # reader = PDFReader()
-    # documents = reader.load_data(Path(file_name))
-    # node_parser = UnstructuredElementNodeParser()
-    # raw_nodes = node_parser.get_nodes_from_documents(documents)
-    # nodes, node_mappings = node_parser.get_base_nodes_and_mappings(
-    #     raw_nodes
-    # )
-
     # setup the vector store
-    collection_name = re.sub(r'\W+', '_', file_name.split("/")[-1]).lower()
+    collection_name = fname_to_collection_name(file_name.as_posix())
     vector_store = setup_vector_store(collection_name)
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    doc_store = setup_doc_store(namespace=f"ra_qe_{collection_name}")
+    index_store = setup_index_store(namespace=f"ra_qe_{collection_name}",
+                                    collection_suffix=f"/index_ra_qe_{collection_name}")
+    storage_context = StorageContext.from_defaults(vector_store=vector_store,
+                                                   docstore=doc_store,
+                                                   index_store=index_store)
 
     index = VectorStoreIndex(
-        # nodes=base_nodes + objects,
-        nodes=base_nodes,
+        nodes=base_nodes + objects,
+        # nodes=base_nodes,
         storage_context=storage_context
     )
+    index.set_index_id(collection_name)
 
-    # index = VectorStoreIndex(
-    #     nodes=nodes, storage_context=storage_context
-    # )
-
-    query_engine = index.as_query_engine(similarity_top_k=10,
-                                         # node_postprocessors=[cohere_rerank]
-                                         )
+    query_engine = index.as_query_engine(similarity_top_k=10)
 
     return query_engine
 
@@ -106,7 +142,7 @@ def parse_and_create_qe(file_name: str, llm: LLM):
 @click.option("--file_name", "-f", required=True,
               help="Path to the file to parse and create the query engine")
 def main(file_name: str):
-    query_engine = parse_and_create_qe(file_name, llm_gpt4o)
+    query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
     response = query_engine.query("What is the dataset used in this work?")
     print(response.metadata)
     print(response.response)

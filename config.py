@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     QDRANT_HOST: str
     QDRANT_PORT: str
 
+    # doc store
+    REDIS_HOST: str
+    REDIS_PORT: int
+
     class Config:
         env_file = ".env"
 

@@ -27,6 +27,8 @@ llama-index-vector-stores-qdrant = "^0.2.16"
 arxiv2text = "^0.1.14"
 unstructured = "^0.15.5"
 marker-pdf = "^0.2.16"
+llama-index-storage-docstore-redis = "^0.1.2"
+llama-index-storage-index-store-redis = "^0.2.0"
 
 
 [build-system]
