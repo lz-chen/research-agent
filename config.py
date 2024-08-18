@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     AZURE_OPENAI_GPT4O_MODEL: str
     AZURE_OPENAI_EMBEDDING_MODEL: str
 
+    LLAMA_CLOUD_API_KEY: str
+
+    # vector store
+    QDRANT_HOST: str
+    QDRANT_PORT: str
+
     class Config:
         env_file = ".env"
 

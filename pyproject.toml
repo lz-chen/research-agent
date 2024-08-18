@@ -6,7 +6,7 @@ authors = ["lz-chen <lingzhen.chen@inmeta.no>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 jupyter = "^1.0.0"
 scholarly = "^1.7.11"
 fake-useragent = "^1.5.1"
@@ -21,6 +21,12 @@ llama-index = "^0.10.65"
 click = "^8.1.7"
 llama-index-embeddings-azure-openai = "^0.1.11"
 llama-index-multi-modal-llms-azure-openai = "^0.1.4"
+llama-parse = "^0.4.9"
+qdrant-client = "^1.11.0"
+llama-index-vector-stores-qdrant = "^0.2.16"
+arxiv2text = "^0.1.14"
+unstructured = "^0.15.5"
+marker-pdf = "^0.2.16"
 
 
 [build-system]
