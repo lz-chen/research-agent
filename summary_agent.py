@@ -1,6 +1,9 @@
 # TODO:
-# - paper 2 pdf should happen before this script
-# - avoid re ingesting nodes to vector store
+# - paper to pdf should happen before this script
+# - avoid re-ingesting nodes to vector store ✅
+# - investigate the index nodes and objects
+# - use unstructured for parsing might be faster
+
 import re
 from pathlib import Path
 from typing import Optional
@@ -8,12 +11,13 @@ from typing import Optional
 import click
 import qdrant_client
 from llama_index.core.agent import ReActAgent, ReActChatFormatter
+from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import MarkdownElementNodeParser
 from llama_index.core.node_parser import (
     UnstructuredElementNodeParser,
 )
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.readers.file import FlatReader, PDFReader
 from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
@@ -28,7 +32,6 @@ from services.embeddings import aoai_embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
-
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -102,9 +105,10 @@ def paper2md(fname: Path, output_dir: Path, langs: Optional[list] = ["English"],
     return subfolder_path
 
 
-def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
+def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False, force_reingest: bool = False):
     # use SimpleDirectoryReader to parse our file
     md_output_dir = file_name.parents[1]
+
     if len(list(md_output_dir.joinpath(file_name.stem).glob("*.md"))) and not force_reparse:
         logging.info(f"Markdown file already exists for '{file_name}'")
         md_folder = md_output_dir.joinpath(file_name.stem)
@@ -115,10 +119,6 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
                                       # file_extractor=file_extractor
                                       required_exts=[".md"], filename_as_id=True,
                                       ).load_data()
-    node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
-    # Retrieve nodes (text) and objects (table)
-    nodes = node_parser.get_nodes_from_documents(documents)
-    base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
 
     # setup the vector store
     collection_name = fname_to_collection_name(file_name.as_posix())
@@ -130,9 +130,30 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
                                                    docstore=doc_store,
                                                    index_store=index_store)
 
+    # if force_reingest:
+    #     vector_store.clear()
+    #     ref_docs = doc_store.get_all_ref_doc_info()
+    #     for d in ref_docs:
+    #         for id_ in d.node_ids:
+    #             doc_store.delete_ref_doc(id_)
+
+    # setup ingest pipeline
+    node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
+    pipeline = IngestionPipeline(
+        transformations=[node_parser],
+        vector_store=vector_store,
+        # cache=cache,
+        docstore=doc_store,
+    )
+    nodes = pipeline.run(documents=documents) # this nodes doesn't contain objects???
+
+    # # Retrieve nodes (text) and objects (table)
+    # nodes = node_parser.get_nodes_from_documents(documents)
+    # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
+
     index = VectorStoreIndex(
         # nodes=base_nodes + objects,
-        nodes=base_nodes,
+        nodes=nodes,
         storage_context=storage_context
     )
     index.set_index_id(collection_name)
@@ -140,6 +161,21 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False):
     query_engine = index.as_query_engine(similarity_top_k=10)
 
     return query_engine
+
+
+def save_paper_sumamry(paper_name: str, summary_text: str, output_dir: str = "./data/summaries"):
+    """
+    Save the paper summary to a markdown file
+    :param paper_name: name of the paper, will be part of the file name
+    :param summary_text: summary text to save
+    :param output_dir: the output directory to save the summary
+    :return:
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    summary_file = Path(output_dir).joinpath(f"{paper_name}_summary.md")
+    with open(summary_file, "w") as f:
+        f.write(summary_text)
+    logging.info(f"Saved summary to '{summary_file}'")
 
 
 def create_agent(file_name: str):
@@ -156,8 +192,10 @@ def create_agent(file_name: str):
             ),
         ),
     )
+    save_tool = FunctionTool.from_defaults(fn=save_paper_sumamry)
+
     # chat_formatter = ReActChatFormatter(context=SUMMARIZE_PAPER_PMT)
-    agent = ReActAgent.from_tools([query_tool], llm=llm_gpt4o,
+    agent = ReActAgent.from_tools([query_tool, save_tool], llm=llm_gpt4o,
                                   # react_chat_formatter=chat_formatter,
                                   max_iterations=30,
                                   verbose=True)
@@ -166,10 +204,17 @@ def create_agent(file_name: str):
 
 
 @click.command()
-@click.option("--file_name", "-f", required=True,
-              help="Path to the file to parse and create the query engine")
-def main(file_name: str):
-    create_agent(file_name)
+@click.option("--file_dir", "-d", required=True,
+              help="Path to the directory that contains file to parse and create the query engine")
+def main(file_dir: str):
+    for f in Path(file_dir).rglob("*.pdf"):
+        if f.parents[1].joinpath("summaries").joinpath(f"{f.stem}_summary.md").exists():
+            logging.info(f"Summary already exists for '{f}', skip generation")
+            continue
+        logging.info(f"Creating agent for '{f}' to generate summary")
+        create_agent(f.as_posix())
+
+    # create_agent(file_name)
     # query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
     # response = query_engine.query("What is the dataset used in this work?")
     # print(response.metadata)

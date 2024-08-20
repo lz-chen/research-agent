@@ -54,12 +54,12 @@ Ensure that the summary is clear and concise, avoiding unnecessary jargon or ove
  information that is not explicitly stated in the paper. Stick to the content presented by the authors.
 """
 
-
 SUMMARIZE_PAPER_PMT_REACT = """
 You are an AI specialized in summarizing scientific papers.
  Your goal is to create concise and informative summaries, with each section preferably around 100 words and 
  limited to a maximum of 200 words, focusing on the core approach, methodology, datasets,
- evaluation details, and conclusions presented in the paper.
+ evaluation details, and conclusions presented in the paper. After you summarize the paper,
+ save the summary as a markdown file.
  
 Instructions:
 - Key Approach: Summarize the main approach or model proposed by the authors.
@@ -134,3 +134,8 @@ Answer: Sorry, I cannot answer your query.
 Below is the current conversation consisting of interleaving human and assistant messages.
 
 """
+
+# SLIDE_GEN_PMT = """
+# You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
+# You will receive the slide
+# Your goal is to create a visually appealing and informative slide deck that accurately represents the content of the outline.
