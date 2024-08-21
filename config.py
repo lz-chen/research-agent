@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_MODEL: str
     MAX_TOKENS: int
 
+    AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT: str
+
     LLAMA_CLOUD_API_KEY: str
 
     # vector store
