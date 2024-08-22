@@ -10,22 +10,22 @@ COPY package.json ./
 # Install dependencies
 RUN yarn install --frozen-lockfile
 
-# Copy the rest of the application code
+# Copy only necessary files
 COPY . .
 
 # Build the app
 RUN yarn build
 
 # Production stage
-FROM node:14.17.0-alpine
+FROM node:16-alpine
 
 WORKDIR /app
 
 # Copy built assets from the build stage
 COPY --from=build /app/build ./build
 
-# Install serve
-RUN yarn global add serve
+# Install serve globally
+RUN npm install -g serve
 
 # Set the command to start the app
 CMD ["serve", "-s", "build", "-l", "3000"]
