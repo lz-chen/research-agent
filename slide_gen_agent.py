@@ -21,14 +21,19 @@ import click
 # from llama_parse import LlamaParse
 # from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core import Settings
+from llama_index.core.agent import ReActAgent
+from llama_index.core.tools import FunctionTool
+
 from config import settings
-from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT_REACT
+from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm_gpt4o, new_gpt4o
 from services.embeddings import aoai_embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
 from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step, Event, draw_all_possible_flows
+
+from tools import get_all_layouts_info
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -152,62 +157,65 @@ class SlideGenWorkflow(Workflow):
         from llama_index.tools.azure_code_interpreter import (
             AzureCodeInterpreterToolSpec,
         )
+        user_prompt = """
+        Please create slide deck for following slide outlines with template {ppt_template_path}.
+        Save the final slide deck to /mnt/data/{final_pptx_fname}.
+        slide outlines:
+        {slide_outlines}
+        """
+
         from llama_index.core.agent import FunctionCallingAgentWorker
+        ppt_template_path = ctx.data["ppt_template_path"]
+        final_pptx_fname = ctx.data["final_pptx_fname"]
+
+        # agent_worker = FunctionCallingAgentWorker.from_tools(
+        #     tools=azure_code_interpreter_spec.to_tool_list(),
+        #     llm=llm_gpt4o,
+        #     allow_parallel_tool_calls=False,
+        #     system_prompt=SLIDE_GEN_PMT,
+        #     verbose=True
+        # )
+        # agent = agent_worker.as_agent()
+
+        # Create the ReActAgent and inject the tools defined in the AzureDynamicSessionsToolSpec
+        layout_tool = FunctionTool.from_defaults(fn=get_all_layouts_info)
 
         azure_code_interpreter_spec = AzureCodeInterpreterToolSpec(
             pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
             local_save_path="./code_interpreter",
         )
+        # spec_functions = ["code_interpreter", "list_files", "download_file_to_local"]
+        # azure_code_interpreter_spec.spec_functions = spec_functions
 
-        sys_prompt = """"
-        You are an AI that generate slide deck from a given slides outline of paper summaries and uses the
-        template file provided. Write python-pptx code for generating the slide deck.
-        Requirement:
-        - One slide page per paper, the title of the slide should be the paper title
-        - Use appropriate font size, color and style from the template to make the slide visually appealing
-        - For each key point in the paper, summary, create a different text box in the slide
-        """
+        agent = ReActAgent.from_tools(
+            tools=azure_code_interpreter_spec.to_tool_list() + [layout_tool],
+            llm=llm_gpt4o,
+            verbose=True,
+            max_iterations=50
+        )
 
-        user_prompt = """
-        Please create slide deck for following slide outlines with template {ppt_template_path}.
-        Save the final slide deck to {final_pptx_fname}.
-        slide outlines:
-        {slide_outlines}
-        """
+        prompt = SLIDE_GEN_PMT + REACT_PROMPT_SUFFIX
+        agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
 
-        ppt_template_path = ctx.data["ppt_template_path"]
-        final_pptx_fname = ctx.data["final_pptx_fname"]
         res = azure_code_interpreter_spec.upload_file(
             local_file_path=ppt_template_path
         )
         logging.info(f"Uploaded file to Azure: {res}")
 
-        # Create the ReActAgent and inject the tools defined in the AzureDynamicSessionsToolSpec
-        agent_worker = FunctionCallingAgentWorker.from_tools(
-            tools=azure_code_interpreter_spec.to_tool_list(),
-            llm=llm_gpt4o,
-            allow_parallel_tool_calls=False,
-            system_prompt=sys_prompt,
-            verbose=True
-        )
-        agent = agent_worker.as_agent()
-        response = agent.chat(user_prompt.format(ppt_template_path=Path(ppt_template_path).name,
+        response = agent.chat(user_prompt.format(ppt_template_path=ppt_template_path,
                                                  final_pptx_fname=final_pptx_fname,
                                                  slide_outlines=ev.outline))
-        azure_code_interpreter_spec.download_file_to_local(
-            remote_file_path=Path(final_pptx_fname).name,
-            local_file_path=f"code_interpreter/{Path(final_pptx_fname).name}",
-        )
-        # print(ev.code)
+
+        remote_files = azure_code_interpreter_spec.list_files()
+        for f in remote_files:
+            logging.info(f"Downloading remote file: {f.file_full_path}")
+            azure_code_interpreter_spec.download_file_to_local(
+                # remote_file_path=f"/mnt/{Path(final_pptx_fname).name}",
+                # local_file_path=f"code_interpreter/{Path(final_pptx_fname).name}",
+                remote_file_path=f.file_full_path,
+                local_file_path=f"code_interpreter/{f.filename}",
+            )
         return StopEvent()
-
-
-@click.command()
-@click.option("--file_dir", "-d", required=False,
-              help="Path to the directory that contains paper summaries for generating slide outlines",
-              default="./data/summaries_test")
-def main(file_dir: str):
-    asyncio.run(run_workflow(file_dir))
 
 
 async def run_workflow(file_dir: str):
@@ -219,6 +227,14 @@ async def run_workflow(file_dir: str):
         final_pptx_fname="paper_summaries.pptx"
     )
     print(result)
+
+
+@click.command()
+@click.option("--file_dir", "-d", required=False,
+              help="Path to the directory that contains paper summaries for generating slide outlines",
+              default="./data/summaries_test")
+def main(file_dir: str):
+    asyncio.run(run_workflow(file_dir))
 
 
 if __name__ == "__main__":

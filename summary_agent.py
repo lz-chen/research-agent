@@ -26,7 +26,7 @@ from llama_parse import LlamaParse
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core import Settings
 from config import settings
-from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT_REACT
+from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
@@ -199,7 +199,8 @@ def create_agent(file_name: str):
                                   # react_chat_formatter=chat_formatter,
                                   max_iterations=30,
                                   verbose=True)
-    agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(SUMMARIZE_PAPER_PMT_REACT)})
+    prompt = SUMMARIZE_PAPER_PMT + REACT_PROMPT_SUFFIX
+    agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
     agent.chat(f"I want a summary of paper {file_name}")
 
 

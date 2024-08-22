@@ -31,6 +31,7 @@ llama-index-storage-docstore-redis = "^0.1.2"
 llama-index-storage-index-store-redis = "^0.2.0"
 pyvis = "^0.3.2"
 llama-index-tools-azure-code-interpreter = "^0.2.0"
+python-pptx = "^1.0.2"
 
 
 [build-system]

@@ -170,3 +170,6 @@ outputs/*
 
 **.html
 /code_interpreter/
+
+
+**.aider**
