@@ -1,16 +1,16 @@
 # Build stage
-FROM node:14.17.0 as build
+FROM node:16-alpine as build
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json
-COPY package.json ./
+# Copy package.json and yarn.lock
+COPY package.json yarn.lock ./
 
 # Install dependencies
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
-# Copy the current directory contents into the container at /app
+# Copy the rest of the application code
 COPY . .
 
 # Build the app
