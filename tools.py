@@ -64,7 +64,7 @@ def get_all_layouts_info(presentation_file):
         layout_info = {}
 
         # Get the name of the layout
-        layout_info['name'] = layout.name
+        layout_info['layout_name'] = layout.name
 
         # Get information about placeholders
         placeholders_info = []
@@ -97,10 +97,10 @@ def get_all_layouts_info(presentation_file):
 
     return layouts_info
 
-
-info = get_all_layouts_info('/Users/lzchen/PycharmProjects/research_agent/data/Inmeta Brand guidelines 2023.pptx')
-from pprint import pprint
-pprint(info)
+#
+# info = get_all_layouts_info('/Users/lzchen/PycharmProjects/research_agent/data/Inmeta Brand guidelines 2023.pptx')
+# from pprint import pprint
+# pprint(info)
 
 # def outlines2code(slide_outlines: str):
 #     llm = llms.new_gpt4o(temperature=0.0)

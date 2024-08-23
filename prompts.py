@@ -109,23 +109,88 @@ Ensure that the summary is clear and concise, avoiding unnecessary jargon or ove
 
 """
 
-SLIDE_GEN_PMT = """
-You are an AI that generate slide deck from a given slides outline of paper summaries and uses the
-template file provided. Write python-pptx code for generating the slide deck.
+SUMMARY2OUTLINE_PMT = """
+You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
+You will receive a markdown string that contains the summary of papers and 
+you will generate a slide outlines for each paper.
+Requirements:
+- Use the paper title as the slide title
+- Use the summary in the markdown file as the slide content, convert the markdown headings to
+ bullet points by prepending each heading text with a bullet (* or -). You can choose to maintain
+ the hierarchy by using indentation.
+- Rephrase the content to make it more concise, and straight to the point
+- Each bullet point should be less than 15 words
+- A paragraph of text in the slide should be less than 25 words.
+
+Here is the markdown content: {summary} 
+"""
+
+AUGMENT_LAYOUT_PMT = """
+You are an AI that selects slide layout from a template for the slide text given.
+You will receive a pages with title and main text.
+Your task is to select the appropriate layout and information such as index of the placeholder for the page 
+ based on what type of the content it is (e.g. is it topic overview/agenda,
+ or actual content, or thank you message).
+
+The following layout are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+Here is the slide content:
+{slide_content}
+"""
+
+LAYOUT2CODE_PMT = """
+You are an AI that generates python-pptx code for a given slide layout.
+You will receive the layout information and the slide content.
 Requirement:
-- Analyse the template file and understand the layout preset
-- Create both front page and a 'thank you' page
-- Use content layout for the paper summary slides
-- One slide page per paper, the title of the slide should be the paper title
-- The main summary text box should appear under the main title text box
-- Use automatic font size to make sure that the summary text fits in the text box
-- Use appropriate font size, color and style from the template to make the slide visually appealing
-- Vary the content layout of the slides to make the presentation engaging
-- Generate the python code before you try to execute it
-- Save the final slide pptx file
-- Save the python code
+- The function should take the slide template file as an argument (this slide template will 
+  be consistent with the layout information provided)
+- If there is no front page or 'thank you' page, create them
+- One slide page per outline item that you are given, fill in all the title and content you are given
+- Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged 
+ by the order they appear in the list of placeholders)
+- Use layout and text box index according to what is given in each of the slide content item 
+- Use automatic font size to make sure that the text fits in the text box
+- Use appropriate color and style from the template to make the slide visually appealing
+- Return only the python code string WITHOUT markdown formatting nor explanation
+
+Here is the layout information: {layout_info}
+
+Here is the slide content: {slide_content}
 
 """
+
+# General rules of selecting layout:
+# - if the slide text is list of topics or agenda, select one of the 'Agenda' layout
+# - if the slide text contains text and some paragraph, select one of the 'Content' layout
+# - if the slide text is very short, depending on the text, select either 'Frontpage' or 'Thank you' layout
+
+
+# SLIDE_GEN_PMT = """
+# You are an AI that generate slide deck from a given slides outline of paper summaries and uses the
+# template file provided. Write python-pptx code for generating the slide deck.
+# Requirement:
+# - Analyse the template file and understand the layout preset
+# - Create both front page and a 'thank you' page
+# - Use content layout for the paper summary slides
+# - One slide page per paper, the title of the slide should be the paper title
+# - The main summary text box should appear under the main title text box
+# - Use automatic font size to make sure that the summary text fits in the text box
+# - Use appropriate font size, color and style from the template to make the slide visually appealing
+# - Vary the content layout of the slides to make the presentation engaging
+# - Generate the python code before you try to execute it
+# - Save the final slide pptx file
+# - Save the python code
+#
+# """
 #- For each key heading in the paper summary, create a different text box in the slide
 #- For different level of heading in the summary markdown, create paragraph with
 #  appropriate font size in the text box
+
+SLIDE_GEN_PMT = """
+You are an AI agent that generates pptx slide deck by executing code written in python-pptx.
+You need to use the existing pptx template file on disk.
+Locally the template file is located at {template_fpath}. 
+Remotely it might be a different path. 
+Make sure that execution results in a downloadable pptx file.
+"""
