@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from pathlib import Path
 from typing import Optional, List
@@ -26,8 +27,8 @@ from llama_index.core.program import FunctionCallingProgram
 from llama_index.core.tools import FunctionTool
 
 from config import settings
-from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, LAYOUT2CODE_PMT
-from services.llms import llm_gpt4o, new_gpt4o
+from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT
+from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini
 from services.embeddings import aoai_embedder
 import logging
 import sys
@@ -36,6 +37,10 @@ from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, 
 from pydantic import BaseModel, Field
 
 from tools import get_all_layouts_info
+
+from llama_index.tools.azure_code_interpreter import (
+    AzureCodeInterpreterToolSpec,
+)
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -82,7 +87,9 @@ class OutlineEvent(Event):
 
 
 class OutlinesWithLayoutEvent(Event):
-    outline_w_layout: List[SlideOutlineWithLayout]
+    # outline_w_layout: List[SlideOutlineWithLayout]
+    outlines_fpath: Path
+    outline_example: SlideOutlineWithLayout
 
 
 class ConsolidatedOutlineEvent(Event):
@@ -112,23 +119,7 @@ class SlideGenWorkflow(Workflow):
     @step(pass_context=True)
     async def summary2outline(self, ctx: Context, ev: SummaryEvent) -> OutlineEvent:
         """Convert the summary content of one paper to slide outline of one page."""
-        # prompt = """"
-        #     You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
-        #     You will receive a markdown string that contains the summary of papers and
-        #     you will generate a slide outlines for each paper.
-        #     Requirements:
-        #     - One slide page per paper summary
-        #     - Use the paper title as the slide title
-        #     - Use the summary in the markdown file as the slide content,
-        #       keep the key headers as bullet points but you can
-        #       rephrase the content to make it more concise, and straight to the point
-        #     - Each bullet point should be less than 15 words
-        #     - Paragraphs of text in the slide should be less than 25 words.
-        #
-        #     Here is the markdown content: {summary}
-        # """
-
-        llm = new_gpt4o(0.1)
+        llm = new_gpt4o_mini(0.1)
         program = FunctionCallingProgram.from_defaults(
             llm=llm,
             output_cls=SlideOutline,
@@ -144,6 +135,10 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def outlines_with_layout(self, ctx: Context, ev: OutlineEvent) -> OutlinesWithLayoutEvent:
+        """Given a list of slide page outlines, augment each outline with layout information.
+        The layout information includes the layout name, the index of the title placeholder,
+        and the index of the content placeholder. Return an event with the augmented outlines.
+        """
         ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
         if ready is None:
             return None
@@ -151,16 +146,6 @@ class SlideGenWorkflow(Workflow):
         all_layouts = get_all_layouts_info(ctx.data["ppt_template_path"])
         all_layout_names = [layout["layout_name"] for layout in all_layouts]
         ctx.data["available_slide_layouts"] = all_layouts
-
-        # layout_tool = FunctionTool.from_defaults(fn=get_all_layouts_info)
-        # agent_worker = FunctionCallingAgentWorker.from_tools(
-        #     tools=[layout_tool],
-        #     llm=llm_gpt4o,
-        #     allow_parallel_tool_calls=False,
-        #     system_prompt=AUGMENT_LAYOUT_PMT,
-        #     verbose=True
-        # )
-        # agent = agent_worker.as_agent()
 
         # add layout to outline
         llm = new_gpt4o(0.1)
@@ -179,108 +164,50 @@ class SlideGenWorkflow(Workflow):
                 description="Data model for the slide page outline with layout",
             )
             slides_w_layout.append(response)
-        # response = await program.acall(
-        #     summary=ev.summary,
-        #     description="Data model for the slide page outline",
-        # )
 
-        return OutlinesWithLayoutEvent(outline_w_layout=slides_w_layout)
+        # store the slide outlines as json file
+        slide_outlines_json = Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath("slide_outlines.json")
+        with slide_outlines_json.open("w") as f:
+            json.dump([o.json() for o in slides_w_layout], f, indent=4)
+        ctx.data["slide_outlines_json"] = slide_outlines_json
 
-    @step(pass_context=True)
-    async def outlines2code(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> PythonCodeEvent:
-        """Given a list of slide page outlines, generate python-pptx code to create the slides."""
-        # available_layouts = ctx.data["available_slide_layouts"]
-        llm = new_gpt4o(0.0)
-        response = await llm.acomplete(LAYOUT2CODE_PMT.format(layout_info=ctx.data["available_slide_layouts"],
-                                                              slide_content=[o.json() for o in ev.outline_w_layout]))
-        return PythonCodeEvent(code=response.text)
-
-    # @step(pass_context=True)
-    # async def consolidate_outlines(self, ctx: Context, ev: OutlineEvent) -> ConsolidatedOutlineEvent:
-    #     ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
-    #     if ready is None:
-    #         return None
-    #     prompt = """"
-    #     You are an AI that consolidate pieces of slide content to a full slide outline.
-    #     You will receive a list of content items. Merge them to one outline with following requirements:
-    #     - One slide page per item you received
-    #     - Keep the individual content as is
-    #
-    #     The slide content is:
-    #     {slide_content}
-    #     """
-    #     llm = new_gpt4o(0.1)
-    #
-    #     contents = ""
-    #     for n, ev in enumerate(ready):
-    #         contents += f"Slide Page {n}:\n{ev.outline}\n-----------------------------------"
-    #     response = await llm.acomplete(prompt.format(slide_content=contents))
-    #     return ConsolidatedOutlineEvent(outline=response.text)
-
-    # @step(pass_context=True)
-    # def outline2code(self, ctx: Context, ev: ConsolidatedOutlineEvent) -> PythonCodeEvent:
-    #     ppt_template_path = ctx.data["ppt_template_path"]
-    #     prompt = """"
-    #     You are an AI that generate python-pptx code from a given slides outline and uses the
-    #     template file provided. Return ONLY executable code as string,
-    #     NEVER wrap it in a markdown code block. Do not provide explanations.
-    #     The path of pptx template file is `{ppt_template_path}`.
-    #     The outline of the slides is:
-    #     {slide_outlines}
-    #     """
-    #     # user_prompt = """
-    #     # Please create python-pptx code for following slide outlines with template {ppt_template_path}.
-    #     # slide outlines:
-    #     # {slide_outlines}
-    #     # """
-    #     llm = new_gpt4o(0.1)
-    #     response = llm.chat(prompt.format(ppt_template_path=ppt_template_path, slide_outlines=ev.outline))
-    #     return PythonCodeEvent(code=response.text)
+        return OutlinesWithLayoutEvent(outlines_fpath=slide_outlines_json,
+                                       outline_example=slides_w_layout[0])
 
     @step(pass_context=True)
-    # def execute_code(self, ctx: Context, ev: ConsolidatedOutlineEvent) -> StopEvent:
-    def execute_code(self, ctx: Context, ev: PythonCodeEvent) -> StopEvent:
+    async def slide_gen(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> StopEvent:
+        def get_layout():
+            return ctx.data["available_slide_layouts"]
 
-        from llama_index.tools.azure_code_interpreter import (
-            AzureCodeInterpreterToolSpec,
-        )
-        user_prompt = """
-        Please create slide deck for following slide outlines with template {ppt_template_path}.
-        Save the final slide deck to /mnt/data/{final_pptx_fname}.
-        slide outlines:
-        {slide_outlines}
-        """
-
-        from llama_index.core.agent import FunctionCallingAgentWorker
-        ppt_template_path = ctx.data["ppt_template_path"]
-        final_pptx_fname = ctx.data["final_pptx_fname"]
+        layout_tool = FunctionTool.from_defaults(fn=get_layout)
 
         # Create the ReActAgent and inject the tools defined in the AzureDynamicSessionsToolSpec
-        layout_tool = FunctionTool.from_defaults(fn=get_all_layouts_info)
-
         azure_code_interpreter_spec = AzureCodeInterpreterToolSpec(
             pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
-            local_save_path="./code_interpreter",
+            local_save_path=settings.WORKFLOW_ARTIFACTS_PATH,
         )
         spec_functions = ["code_interpreter", "list_files", "upload_file"]
         azure_code_interpreter_spec.spec_functions = spec_functions
 
         agent = ReActAgent.from_tools(
             tools=azure_code_interpreter_spec.to_tool_list() + [layout_tool],
-            llm=new_gpt4o(0.2),
+            llm=new_gpt4o(0.3),
             verbose=True,
             max_iterations=50
         )
 
-        prompt = SLIDE_GEN_PMT.format(template_fpath=ppt_template_path) + REACT_PROMPT_SUFFIX
+        prompt = SLIDE_GEN_PMT.format(json_file_path=ev.outlines_fpath.as_posix(),
+                                      # json_example=json.dumps(ev.outline_example.json()),
+                                      template_fpath=ctx.data["ppt_template_path"]) + REACT_PROMPT_SUFFIX
         agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
 
         res = azure_code_interpreter_spec.upload_file(
-            local_file_path=ppt_template_path
+            local_file_path=ctx.data["ppt_template_path"]
         )
         logging.info(f"Uploaded file to Azure: {res}")
 
-        response = agent.chat(ev.code)
+        response = agent.chat(f"An example of outline item in json is {ev.outline_example.json()},"
+                              f" generate a slide deck")
 
         remote_files = azure_code_interpreter_spec.list_files()
         for f in remote_files:
@@ -289,7 +216,7 @@ class SlideGenWorkflow(Workflow):
                 # remote_file_path=f"/mnt/{Path(final_pptx_fname).name}",
                 # local_file_path=f"code_interpreter/{Path(final_pptx_fname).name}",
                 remote_file_path=f.file_full_path,
-                local_file_path=f"code_interpreter/{f.filename}",
+                local_file_path=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}",
             )
         return StopEvent()
 
@@ -308,7 +235,7 @@ async def run_workflow(file_dir: str):
 @click.command()
 @click.option("--file_dir", "-d", required=False,
               help="Path to the directory that contains paper summaries for generating slide outlines",
-              default="./data/summaries_test")
+              default="./data/summaries")
 def main(file_dir: str):
     asyncio.run(run_workflow(file_dir))
 

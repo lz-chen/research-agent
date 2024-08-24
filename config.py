@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_KEY: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_GPT4O_MODEL: str
+    AZURE_OPENAI_GPT4O_MINI_MODEL: str
     AZURE_OPENAI_EMBEDDING_MODEL: str
     MAX_TOKENS: int
 
@@ -25,6 +26,8 @@ class Settings(BaseSettings):
     # doc store
     REDIS_HOST: str
     REDIS_PORT: int
+
+    WORKFLOW_ARTIFACTS_PATH: str
 
     class Config:
         env_file = ".env"

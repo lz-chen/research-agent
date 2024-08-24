@@ -1,4 +1,5 @@
 from pptx import Presentation
+from pptx.util import Inches
 
 
 def get_all_layouts_info(presentation_file):
@@ -78,6 +79,10 @@ def get_all_layouts_info(presentation_file):
                 'index': placeholder.placeholder_format.idx,
                 'name': placeholder.name,
                 'shape_type': placeholder.shape_type,
+                'left': Inches(placeholder.left.inches),
+                'top': Inches(placeholder.top.inches),
+                'width': Inches(placeholder.width.inches),
+                'height': Inches(placeholder.height.inches),
                 'font_size': font_size
             }
             placeholders_info.append(placeholder_info)
@@ -97,7 +102,6 @@ def get_all_layouts_info(presentation_file):
 
     return layouts_info
 
-#
 # info = get_all_layouts_info('/Users/lzchen/PycharmProjects/research_agent/data/Inmeta Brand guidelines 2023.pptx')
 # from pprint import pprint
 # pprint(info)

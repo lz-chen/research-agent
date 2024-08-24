@@ -32,3 +32,14 @@ def new_gpt4o(temperature=0.0):
         api_key=settings.AZURE_OPENAI_API_KEY,
         api_version=settings.AZURE_OPENAI_API_VERSION,
     )
+
+
+def new_gpt4o_mini(temperature=0.0):
+    return AzureOpenAI(
+        azure_deployment=settings.AZURE_OPENAI_GPT4O_MINI_MODEL,
+        model=settings.AZURE_OPENAI_GPT4O_MINI_MODEL,  # this name will be used in trace
+        temperature=temperature,
+        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+        api_key=settings.AZURE_OPENAI_API_KEY,
+        api_version=settings.AZURE_OPENAI_API_VERSION,
+    )

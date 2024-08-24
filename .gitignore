@@ -173,3 +173,6 @@ outputs/*
 
 
 **.aider**
+/workflow_artifacts/
+
+**__pycache__**
