@@ -1,7 +1,7 @@
 # TODO:
 # - paper to pdf should happen before this script 🟨 REFACTOR DONE, NEED TESTING
 # - avoid re-ingesting nodes to vector store ✅
-# - investigate the index nodes and objects
+# - investigate the index nodes and objects ✅
 # - use unstructured for parsing might be faster
 
 import re
@@ -23,7 +23,7 @@ from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_parse import LlamaParse
-from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core import Settings
 from config import settings
 from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
@@ -34,7 +34,6 @@ import logging
 import sys
 from llama_index.core import PromptTemplate
 import json
-
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -143,18 +142,24 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
                 continue
 
     nodes = pipeline.run(documents=documents)  # this nodes doesn't contain objects???
-    visualize_nodes_with_attributes(nodes,
-                                    graph_name_prefix=f"workflow_artifacts/node_visualizations/{collection_name}")
-    # # Retrieve nodes (text) and objects (table)
-    # nodes = node_parser.get_nodes_from_documents(documents)
-    # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
+    if nodes:
+        logging.info(f"Successfully ingested {len(nodes)} nodes. Saving node visualizations...")
+        visualize_nodes_with_attributes(nodes,
+                                        graph_name_prefix=f"workflow_artifacts/node_visualizations/{collection_name}")
+        # # Retrieve nodes (text) and objects (table)
+        # nodes = node_parser.get_nodes_from_documents(documents)
+        # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
 
-    index = VectorStoreIndex(
-        # nodes=base_nodes + objects,
-        nodes=nodes,
-        storage_context=storage_context
-    )
-    index.set_index_id(collection_name)
+        logging.info(f"Creating index with name {collection_name} for '{parsed_paper_dir}'")
+        index = VectorStoreIndex(
+            # nodes=base_nodes + objects,
+            nodes=nodes,
+            storage_context=storage_context
+        )
+        index.set_index_id(collection_name)
+    else:
+        logging.info(f"No new nodes ingested, loading index {collection_name} from storage context...")
+        index = load_index_from_storage(storage_context, index_id=collection_name)
 
     query_engine = index.as_query_engine(similarity_top_k=10)
 
