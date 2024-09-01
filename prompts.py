@@ -163,7 +163,7 @@ If you can't find those files at remote location, you need to upload them.
 Requirement:
 - If there is no front page or 'thank you' page, create them by using the related layout template in the
  layout information provided, DO NOT assume the index of the layout for them
-- Use automatic font size to make sure that the text fits in the text box
+- Use automatic font size (MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE) to make sure that the text fits in the text box
 - One slide page per outline item that you are given, fill in all the title and content you are given
 - Use layout and text box index according to what is given in each of the slide content item 
 - Vary the content layout of the slides to make the presentation engaging

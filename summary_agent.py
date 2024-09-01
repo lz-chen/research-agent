@@ -29,9 +29,12 @@ from config import settings
 from prompts import LLAMAPARSE_INSTRUCTION, SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
+from utils.visualization import visualize_nodes_with_attributes
 import logging
 import sys
 from llama_index.core import PromptTemplate
+import json
+
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -46,6 +49,24 @@ Settings.embed_model = aoai_embedder
 
 def fname_to_collection_name(fname: str):
     return re.sub(r'\W+', '_', fname.split("/")[-1]).lower()
+
+
+def load_json_toc(toc_file: Path):
+    with open(toc_file, 'r') as f:
+        toc_dict = json.load(f)
+    return toc_dict['toc']
+
+
+def toc_json_to_markdown(toc_file: Path):
+    toc_dict = load_json_toc(toc_file)
+    markdown_lines = []
+    for item in toc_dict:
+        level = item['level']
+        title = item['title']
+        heading = '#' * (level + 1) + ' ' + title
+        markdown_lines.append(heading)
+
+    return '\n'.join(markdown_lines)
 
 
 def setup_vector_store(collection_name: str):
@@ -100,23 +121,30 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
                                                    docstore=doc_store,
                                                    index_store=index_store)
 
-    # if force_reingest:
-    #     vector_store.clear()
-    #     ref_docs = doc_store.get_all_ref_doc_info()
-    #     for d in ref_docs:
-    #         for id_ in d.node_ids:
-    #             doc_store.delete_ref_doc(id_)
-
     # setup ingest pipeline
-    node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
+    # node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
+    node_parser = UnstructuredElementNodeParser(llm=llm).from_defaults()
     pipeline = IngestionPipeline(
         transformations=[node_parser],
         vector_store=vector_store,
         # cache=cache,
         docstore=doc_store,
     )
-    nodes = pipeline.run(documents=documents)  # this nodes doesn't contain objects???
 
+    if force_reingest:
+        vector_store.client.delete_collection(collection_name)
+        # pipeline.disable_cache = True
+        doc_ids = [d for d in doc_store.docs]
+        for d in doc_ids:
+            try:
+                doc_store.delete_document(d)
+            except Exception as e:
+                logging.error(f"Error deleting document {d}: {e}")
+                continue
+
+    nodes = pipeline.run(documents=documents)  # this nodes doesn't contain objects???
+    visualize_nodes_with_attributes(nodes,
+                                    graph_name_prefix=f"workflow_artifacts/node_visualizations/{collection_name}")
     # # Retrieve nodes (text) and objects (table)
     # nodes = node_parser.get_nodes_from_documents(documents)
     # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
@@ -148,16 +176,19 @@ def save_paper_sumamry(paper_name: str, summary_text: str, output_dir: str = "./
     logging.info(f"Saved summary to '{summary_file}'")
 
 
-def create_agent(file_dir: Path):
+def create_agent(file_dir: Path, force_reingest: bool):
+    toc_file = list(file_dir.glob("*.json"))[0]
+    toc_md = toc_json_to_markdown(toc_file)
     logging.info(f"Creating query engine for '{file_dir}'")
-    query_engine = create_qe(file_dir, llm_gpt4o)
+    query_engine = create_qe(file_dir, llm_gpt4o, force_reingest)
     logging.info(f"Creating agent for querying '{file_dir}'")
     query_tool = QueryEngineTool(
         query_engine=query_engine,
         metadata=ToolMetadata(
             name=f"index_{fname_to_collection_name(file_dir.as_posix())}",
             description=(
-                f"This index contains information about paper {file_dir}, "
+                f"This index contains information about paper {file_dir}, with the following table of contents:\n"
+                f"{toc_md}\n"
                 "Use a detailed plain text question as input to the tool to query information in the table."
             ),
         ),
@@ -175,13 +206,15 @@ def create_agent(file_dir: Path):
 
 
 @click.command()
-@click.option("--file_dir", "-d", required=True,
-              defualt="./data/parsed_papers",
+@click.option("--parsed-paper-dir", "-d", required=False,
+              default="./data/parsed_papers",
               help="Path to the directory that contains file to parse and create the query engine")
-def main(parsed_paper_dir: str):
+@click.option("--force-reingest", "-f", required=False, default=False, is_flag=True,
+              help="Force re-ingest the data to the vector store")
+def main(parsed_paper_dir: str, force_reingest: bool):
     parsed_paper_folders = [f for f in Path(parsed_paper_dir).iterdir() if f.is_dir()]
     for f in parsed_paper_folders:
-        create_agent(f)
+        create_agent(f, force_reingest)
 
     # create_agent(file_name)
     # query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
