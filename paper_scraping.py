@@ -195,6 +195,50 @@ def download_relevant_citations(citation_dict: Dict[str, Any]):
                 download_paper_arxiv(arxiv_id,
                                      paper_dir.as_posix(),
                                      f"{v['citation'].title}.pdf")
+    return paper_dir
+
+
+def paper2md(fname: Path, output_dir: Path, langs: Optional[list] = ["English"], max_pages: Optional[int] = None,
+             batch_multiplier: Optional[int] = 1, start_page: Optional[int] = None):
+    # https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
+    from marker.convert import convert_single_pdf
+    from marker.models import load_all_models
+    from marker.output import save_markdown
+    import time
+
+    model_lst = load_all_models()
+    start = time.time()
+    full_text, images, out_meta = convert_single_pdf(fname.as_posix(), model_lst, max_pages=max_pages, langs=langs,
+                                                     batch_multiplier=batch_multiplier, start_page=start_page)
+
+    name = fname.name
+    subfolder_path = save_markdown(output_dir.as_posix(), name, full_text, images, out_meta)
+
+    logging.info(f"Saved markdown to the '{subfolder_path}' folder")
+    logging.debug(f"Total time: {time.time() - start}")
+    # return subfolder_path
+
+
+def parse_pdf(pdf_path: Path, force_reparse=False):
+    md_output_dir = pdf_path.parents[1].joinpath("parsed_papers")
+
+    if len(list(md_output_dir.joinpath(pdf_path.stem).glob("*.md"))) and not force_reparse:
+        logging.info(f"force_reparse=False and Markdown file already exists for '{pdf_path}', skipping...")
+    else:
+        logging.info(f"Converting '{pdf_path}' to markdown")
+        paper2md(Path(pdf_path), md_output_dir)
+    return md_output_dir
+
+
+def parse_paper_pdfs(papers_dir: Path, force_reparse=False):
+    for f in papers_dir.rglob("*.pdf"):
+        if f.parents[1].joinpath("summaries").joinpath(f"{f.stem}_summary.md").exists():
+            logging.info(f"Summary already exists for '{f}', skip generation")
+            continue
+        logging.info(f"Parsing pdf file '{f}' to markdown")
+        parse_pdf(f, force_reparse)
+
+
 
 
 @click.command()
@@ -204,7 +248,8 @@ def main(entry_paper_title):
     citations = get_paper_with_citations(entry_paper_title)
     if citations:
         relevant_citations = asyncio.run(filter_relevant_citations(citations))
-        download_relevant_citations(relevant_citations)
+        paper_dir = download_relevant_citations(relevant_citations)
+        parse_paper_pdfs(paper_dir)
     # pprint(relevant_citations)
 
 

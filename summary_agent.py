@@ -1,5 +1,5 @@
 # TODO:
-# - paper to pdf should happen before this script
+# - paper to pdf should happen before this script 🟨 REFACTOR DONE, NEED TESTING
 # - avoid re-ingesting nodes to vector store ✅
 # - investigate the index nodes and objects
 # - use unstructured for parsing might be faster
@@ -84,44 +84,14 @@ def setup_index_store(namespace: str, collection_suffix: str):
     )
 
 
-def paper2md(fname: Path, output_dir: Path, langs: Optional[list] = ["English"], max_pages: Optional[int] = None,
-             batch_multiplier: Optional[int] = 1, start_page: Optional[int] = None):
-    # https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
-    from marker.convert import convert_single_pdf
-    from marker.models import load_all_models
-    from marker.output import save_markdown
-    import time
-
-    model_lst = load_all_models()
-    start = time.time()
-    full_text, images, out_meta = convert_single_pdf(fname.as_posix(), model_lst, max_pages=max_pages, langs=langs,
-                                                     batch_multiplier=batch_multiplier, start_page=start_page)
-
-    name = fname.name
-    subfolder_path = save_markdown(output_dir.as_posix(), name, full_text, images, out_meta)
-
-    logging.info(f"Saved markdown to the '{subfolder_path}' folder")
-    logging.debug(f"Total time: {time.time() - start}")
-    return subfolder_path
-
-
-def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False, force_reingest: bool = False):
-    # use SimpleDirectoryReader to parse our file
-    md_output_dir = file_name.parents[1]
-
-    if len(list(md_output_dir.joinpath(file_name.stem).glob("*.md"))) and not force_reparse:
-        logging.info(f"Markdown file already exists for '{file_name}'")
-        md_folder = md_output_dir.joinpath(file_name.stem)
-    else:
-        logging.info(f"Converting '{file_name}' to markdown")
-        md_folder = paper2md(Path(file_name), md_output_dir)
-    documents = SimpleDirectoryReader(input_dir=md_folder,
+def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
+    documents = SimpleDirectoryReader(input_dir=parsed_paper_dir.as_posix(),
                                       # file_extractor=file_extractor
                                       required_exts=[".md"], filename_as_id=True,
                                       ).load_data()
 
     # setup the vector store
-    collection_name = fname_to_collection_name(file_name.as_posix())
+    collection_name = fname_to_collection_name(parsed_paper_dir.as_posix())
     vector_store = setup_vector_store(collection_name)
     doc_store = setup_doc_store(namespace=f"ra_qe_{collection_name}")
     index_store = setup_index_store(namespace=f"ra_qe_{collection_name}",
@@ -145,7 +115,7 @@ def parse_and_create_qe(file_name: Path, llm: LLM, force_reparse: bool = False, 
         # cache=cache,
         docstore=doc_store,
     )
-    nodes = pipeline.run(documents=documents) # this nodes doesn't contain objects???
+    nodes = pipeline.run(documents=documents)  # this nodes doesn't contain objects???
 
     # # Retrieve nodes (text) and objects (table)
     # nodes = node_parser.get_nodes_from_documents(documents)
@@ -178,16 +148,16 @@ def save_paper_sumamry(paper_name: str, summary_text: str, output_dir: str = "./
     logging.info(f"Saved summary to '{summary_file}'")
 
 
-def create_agent(file_name: str):
-    logging.info(f"Creating query engine for '{file_name}'")
-    query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
-    logging.info(f"Creating agent for querying '{file_name}'")
+def create_agent(file_dir: Path):
+    logging.info(f"Creating query engine for '{file_dir}'")
+    query_engine = create_qe(file_dir, llm_gpt4o)
+    logging.info(f"Creating agent for querying '{file_dir}'")
     query_tool = QueryEngineTool(
         query_engine=query_engine,
         metadata=ToolMetadata(
-            name=f"index_{fname_to_collection_name(file_name)}",
+            name=f"index_{fname_to_collection_name(file_dir.as_posix())}",
             description=(
-                f"This index contains information about paper {file_name}, "
+                f"This index contains information about paper {file_dir}, "
                 "Use a detailed plain text question as input to the tool to query information in the table."
             ),
         ),
@@ -201,19 +171,17 @@ def create_agent(file_name: str):
                                   verbose=True)
     prompt = SUMMARIZE_PAPER_PMT + REACT_PROMPT_SUFFIX
     agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
-    agent.chat(f"I want a summary of paper {file_name}")
+    agent.chat(f"I want a summary of paper {file_dir}")
 
 
 @click.command()
 @click.option("--file_dir", "-d", required=True,
+              defualt="./data/parsed_papers",
               help="Path to the directory that contains file to parse and create the query engine")
-def main(file_dir: str):
-    for f in Path(file_dir).rglob("*.pdf"):
-        if f.parents[1].joinpath("summaries").joinpath(f"{f.stem}_summary.md").exists():
-            logging.info(f"Summary already exists for '{f}', skip generation")
-            continue
-        logging.info(f"Creating agent for '{f}' to generate summary")
-        create_agent(f.as_posix())
+def main(parsed_paper_dir: str):
+    parsed_paper_folders = [f for f in Path(parsed_paper_dir).iterdir() if f.is_dir()]
+    for f in parsed_paper_folders:
+        create_agent(f)
 
     # create_agent(file_name)
     # query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
