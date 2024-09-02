@@ -15,12 +15,26 @@ llm_gpt4o = AzureOpenAI(
 
 mm_gpt4o = AzureOpenAIMultiModal(
     azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
+    model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
     temperature=0.0,
     max_new_tokens=settings.MAX_TOKENS,  # 4096 is the maximum number of tokens allowed by the API
     azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
     api_key=settings.AZURE_OPENAI_API_KEY,
     api_version=settings.AZURE_OPENAI_API_VERSION,
 )
+
+
+def new_mm_gpt4o(temperature=0.0, callback_manager=None):
+    return AzureOpenAIMultiModal(
+        azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
+        model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
+        temperature=temperature,
+        max_new_tokens=settings.MAX_TOKENS,  # 4096 is the maximum number of tokens allowed by the API
+        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+        api_key=settings.AZURE_OPENAI_API_KEY,
+        api_version=settings.AZURE_OPENAI_API_VERSION,
+        callback_manager=callback_manager,
+    )
 
 
 def new_gpt4o(temperature=0.0):

@@ -74,7 +74,7 @@ def get_all_layouts_info(presentation_file):
             font_size = None
             if text_frame and text_frame.paragraphs and text_frame.paragraphs[0].font.size:
                 font_size = text_frame.paragraphs[0].font.size.pt  # Convert to points (pt)
-
+            auto_size = text_frame.auto_size.name if text_frame.auto_size else None
             placeholder_info = {
                 'index': placeholder.placeholder_format.idx,
                 'name': placeholder.name,
@@ -83,7 +83,8 @@ def get_all_layouts_info(presentation_file):
                 'top': Inches(placeholder.top.inches),
                 'width': Inches(placeholder.width.inches),
                 'height': Inches(placeholder.height.inches),
-                'font_size': font_size
+                'font_size': font_size,
+                'auto_size': auto_size
             }
             placeholders_info.append(placeholder_info)
         layout_info['placeholders'] = placeholders_info

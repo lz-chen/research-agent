@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 import click
 # import qdrant_client
@@ -99,6 +99,14 @@ class ConsolidatedOutlineEvent(Event):
 class PythonCodeEvent(Event):
     code: str
 
+class SlideGeneratedEvent(Event):
+    pptx_fpath: str # remote pptx path
+
+
+class SlideValidationEvent(Event):
+    result: Literal["valid", "invalid"]
+    comment: Optional[str] = None
+
 
 class SlideGenWorkflow(Workflow):
 
@@ -175,7 +183,7 @@ class SlideGenWorkflow(Workflow):
                                        outline_example=slides_w_layout[0])
 
     @step(pass_context=True)
-    async def slide_gen(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> StopEvent:
+    async def slide_gen(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> SlideGeneratedEvent:
         def get_layout():
             return ctx.data["available_slide_layouts"]
 
@@ -218,7 +226,27 @@ class SlideGenWorkflow(Workflow):
                 remote_file_path=f.file_full_path,
                 local_file_path=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}",
             )
-        return StopEvent()
+        return SlideGeneratedEvent(pptx_fpath="")
+
+    @step(pass_context=True)
+    async def validate_slides(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> StopEvent | SlideValidationEvent:
+        """Validate the generated slide deck"""
+        # slide to images
+        # upload image w. prompt for validation to gpt
+        # get structured response
+        # go to modify_slides if invalid or stop if valid
+        pass
+
+    @step(pass_context=True)
+    async def modify_slides(self, ctx: Context, ev: SlideValidationEvent) -> SlideValidationEvent:
+        """Modify the slides based on the validation feedback"""
+        # give agent code_interpreter and get_layout tools
+        # use feedback as prompt to agent
+        # agent make changes to the slides and save slide
+        pass
+
+    # todo: set max retries
+    # todo: make tools common in the workflow
 
 
 async def run_workflow(file_dir: str):
@@ -235,7 +263,7 @@ async def run_workflow(file_dir: str):
 @click.command()
 @click.option("--file_dir", "-d", required=False,
               help="Path to the directory that contains paper summaries for generating slide outlines",
-              default="./data/summaries")
+              default="./data/summaries_test")
 def main(file_dir: str):
     asyncio.run(run_workflow(file_dir))
 
