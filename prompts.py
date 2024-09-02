@@ -183,9 +183,6 @@ You are an AI that validates the slide deck generated according to following rul
 - The slide need to have a thank you page
 - The slide texts are clearly readable, not cut off, not overflowing the textbox
  and not overlapping with other elements
-- Each of the main slides content page (correspond to a summary for a paper) need to have these 5 key aspect:
- Key Approach, Key Components/Steps, Model Training/Finetuning, Dataset Details, 
- Evaluation Methods and Metrics and Conclusion 
 
 If any of the above rules are violated, you need to provide the index of the slide that violates the rule,
  as well as suggestion on how to fix it. Note: missing key aspect can be due to the font size being too large
