@@ -159,6 +159,7 @@ You will be provided with a json file `{json_file_path}` that contains a list of
  and layout to use from the template.
 The template file is located at `{template_fpath}`.
 If you can't find those files at remote location, you need to upload them.
+Respond user with the python code that generates the slide deck.
 
 Requirement:
 - If there is no front page or 'thank you' page, create them by using the related layout template in the
@@ -169,10 +170,34 @@ Requirement:
 - Use layout and text box index according to what is given in each of the slide content item 
 - Vary the content layout of the slides to make the presentation engaging
 - Generate the python code before you try to execute it
-- Save the final slide pptx file, make sure to let user know the path where the file is saved
-- Save the python code
+- Save the final slide pptx file with name `{final_slide_fname}`
 
 """
 #- For each key heading in the paper summary, create a different text box in the slide
 #- For different level of heading in the summary markdown, create paragraph with
 #  appropriate font size in the text box
+
+SLIDE_VALIDATION_PMT = """
+You are an AI that validates the slide deck generated according to following rules:
+- The slide need to have a front page 
+- The slide need to have a thank you page
+- The slide texts are clearly readable, not cut off, not overflowing the textbox
+ and not overlapping with other elements
+- Each of the main slides content page (correspond to a summary for a paper) need to have these 5 key aspect:
+ Key Approach, Key Components/Steps, Model Training/Finetuning, Dataset Details, 
+ Evaluation Methods and Metrics and Conclusion 
+
+If any of the above rules are violated, you need to provide the index of the slide that violates the rule,
+ as well as suggestion on how to fix it. Note: missing key aspect can be due to the font size being too large
+ and the text is not visible in the slide, make sure to suggest checking the original slide content texts to
+ see if they exist, and reducing the font size as a solution.
+
+"""
+
+SLIDE_MODIFICATION_PMT = """
+You are an AI that modifies the slide deck according to given feedback using python-pptx library.
+The original slide deck can be found here {pptx_path}. 
+The feedback provided is as follows: {feedback}.
+Save the modified slide deck as {modified_pptx_path}.
+
+"""

@@ -18,7 +18,7 @@ Settings.llm = new_mm_gpt4o()
 
 token_counter = TokenCountingHandler(
     tokenizer=tiktoken.encoding_for_model(Settings.llm.model).encode,
-    verbose=True
+    # verbose=True
 )
 Settings.callback_manager = CallbackManager([token_counter])
 Settings.llm.callback_manager = Settings.callback_manager

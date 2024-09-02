@@ -1,7 +1,9 @@
 import asyncio
 import json
 import re
+import string
 from pathlib import Path
+import random
 from typing import Optional, List, Literal
 
 import click
@@ -21,14 +23,16 @@ import click
 # from llama_index.vector_stores.qdrant import QdrantVectorStore
 # from llama_parse import LlamaParse
 # from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
-from llama_index.core import Settings
+from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.core.agent import ReActAgent, FunctionCallingAgentWorker
-from llama_index.core.program import FunctionCallingProgram
+from llama_index.core.output_parsers import PydanticOutputParser
+from llama_index.core.program import FunctionCallingProgram, MultiModalLLMCompletionProgram
 from llama_index.core.tools import FunctionTool
 
 from config import settings
-from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT
-from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini
+from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, SLIDE_VALIDATION_PMT, \
+    SLIDE_MODIFICATION_PMT
+from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
 import sys
@@ -41,6 +45,8 @@ from tools import get_all_layouts_info
 from llama_index.tools.azure_code_interpreter import (
     AzureCodeInterpreterToolSpec,
 )
+
+from utils.file_processing import pptx2images
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -78,6 +84,11 @@ class SlideOutlineWithLayout(BaseModel):
     idx_content_placeholder: str = Field(..., description="Index of the content placeholder in the page layout")
 
 
+class SlideValidationResult(BaseModel):
+    is_valid: bool
+    suggestion_to_fix: str
+
+
 class SummaryEvent(Event):
     summary: str
 
@@ -99,24 +110,64 @@ class ConsolidatedOutlineEvent(Event):
 class PythonCodeEvent(Event):
     code: str
 
+
 class SlideGeneratedEvent(Event):
-    pptx_fpath: str # remote pptx path
+    pptx_fpath: str  # remote pptx path
 
 
 class SlideValidationEvent(Event):
-    result: Literal["valid", "invalid"]
-    comment: Optional[str] = None
+    result: SlideValidationResult
 
 
 class SlideGenWorkflow(Workflow):
+    max_validation_retries: int = 10
+    slide_template_path: str = "data/Inmeta 2023 template.pptx"
+    final_slide_fname: str = "paper_summaries.pptx"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
+        s = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+
+        self.azure_code_interpreter = AzureCodeInterpreterToolSpec(
+            pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
+            local_save_path=settings.WORKFLOW_ARTIFACTS_PATH,
+        )
+        spec_functions = ["code_interpreter", "list_files", "upload_file"]
+        self.azure_code_interpreter.spec_functions = spec_functions
+        self.pdf2images_tool = FunctionTool.from_defaults(fn=pptx2images)
+        self.save_python_code_tool = FunctionTool.from_defaults(fn=self.save_python_code)
+        self.all_layout = get_all_layouts_info(self.slide_template_path)
+        self.all_layout_tool = FunctionTool.from_defaults(fn=self.get_all_layout)
+
+    def get_all_layout(self):
+        """Get all layout information"""
+        return self.all_layout
+
+    def download_all_files_from_session(self):
+        """Download all files from the Azure session"""
+        remote_files = self.azure_code_interpreter.list_files()
+        for f in remote_files:
+            logging.info(f"Downloading remote file: {f.file_full_path}")
+            self.azure_code_interpreter.download_file_to_local(
+                remote_file_path=f.file_full_path,
+                local_file_path=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}",
+            )
+
+    @staticmethod
+    def save_python_code(code: str):
+        """Save the python code to file"""
+        with open(f"{settings.WORKFLOW_ARTIFACTS_PATH}/code.py", "w") as f:
+            f.write(code)
 
     @step(pass_context=True, num_workers=4)
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
 
-        ctx.data["ppt_template_path"] = ev.get("ppt_template_path")
-        ctx.data["final_pptx_fname"] = ev.get("final_pptx_fname")
+        # ctx.data["ppt_template_path"] = ev.get("ppt_template_path")
+        # ctx.data["final_pptx_fname"] = ev.get("final_pptx_fname")
+        ctx.data["n_retry"] = 0
 
         markdown_files = list(Path(ev.get("file_dir")).glob("*.md"))
         ctx.data["n_summaries"] = len(markdown_files)
@@ -150,10 +201,7 @@ class SlideGenWorkflow(Workflow):
         ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
         if ready is None:
             return None
-        # get slide layouts
-        all_layouts = get_all_layouts_info(ctx.data["ppt_template_path"])
-        all_layout_names = [layout["layout_name"] for layout in all_layouts]
-        ctx.data["available_slide_layouts"] = all_layouts
+        all_layout_names = [layout["layout_name"] for layout in self.all_layout]
 
         # add layout to outline
         llm = new_gpt4o(0.1)
@@ -168,7 +216,7 @@ class SlideGenWorkflow(Workflow):
             response = await program.acall(
                 slide_content=ev.outline.json(),
                 available_layout_names=all_layout_names,
-                available_layouts=all_layouts,
+                available_layouts=self.all_layout,
                 description="Data model for the slide page outline with layout",
             )
             slides_w_layout.append(response)
@@ -184,69 +232,86 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def slide_gen(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> SlideGeneratedEvent:
-        def get_layout():
-            return ctx.data["available_slide_layouts"]
-
-        layout_tool = FunctionTool.from_defaults(fn=get_layout)
-
-        # Create the ReActAgent and inject the tools defined in the AzureDynamicSessionsToolSpec
-        azure_code_interpreter_spec = AzureCodeInterpreterToolSpec(
-            pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
-            local_save_path=settings.WORKFLOW_ARTIFACTS_PATH,
-        )
-        spec_functions = ["code_interpreter", "list_files", "upload_file"]
-        azure_code_interpreter_spec.spec_functions = spec_functions
-
         agent = ReActAgent.from_tools(
-            tools=azure_code_interpreter_spec.to_tool_list() + [layout_tool],
-            llm=new_gpt4o(0.3),
+            tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
+            llm=new_gpt4o(0.1),
             verbose=True,
             max_iterations=50
         )
 
         prompt = SLIDE_GEN_PMT.format(json_file_path=ev.outlines_fpath.as_posix(),
-                                      # json_example=json.dumps(ev.outline_example.json()),
-                                      template_fpath=ctx.data["ppt_template_path"]) + REACT_PROMPT_SUFFIX
+                                      template_fpath=self.slide_template_path,
+                                      final_slide_fname=self.final_slide_fname
+                                      ) + REACT_PROMPT_SUFFIX
         agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
 
-        res = azure_code_interpreter_spec.upload_file(
-            local_file_path=ctx.data["ppt_template_path"]
+        res = self.azure_code_interpreter.upload_file(
+            local_file_path=self.slide_template_path
         )
         logging.info(f"Uploaded file to Azure: {res}")
 
         response = agent.chat(f"An example of outline item in json is {ev.outline_example.json()},"
                               f" generate a slide deck")
-
-        remote_files = azure_code_interpreter_spec.list_files()
-        for f in remote_files:
-            logging.info(f"Downloading remote file: {f.file_full_path}")
-            azure_code_interpreter_spec.download_file_to_local(
-                # remote_file_path=f"/mnt/{Path(final_pptx_fname).name}",
-                # local_file_path=f"code_interpreter/{Path(final_pptx_fname).name}",
-                remote_file_path=f.file_full_path,
-                local_file_path=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}",
-            )
-        return SlideGeneratedEvent(pptx_fpath="")
+        self.download_all_files_from_session()
+        return SlideGeneratedEvent(pptx_fpath=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{self.final_slide_fname}")
 
     @step(pass_context=True)
-    async def validate_slides(self, ctx: Context, ev: OutlinesWithLayoutEvent) -> StopEvent | SlideValidationEvent:
+    async def validate_slides(self, ctx: Context, ev: SlideGeneratedEvent) -> StopEvent | SlideValidationEvent:
         """Validate the generated slide deck"""
+        ctx.data["n_retry"] += 1
+        ctx.data["latest_pptx_file"] = Path(ev.pptx_fpath).name
         # slide to images
-        # upload image w. prompt for validation to gpt
-        # get structured response
-        # go to modify_slides if invalid or stop if valid
-        pass
+        img_dir = pptx2images(Path(ev.pptx_fpath))
+
+        # upload image w. prompt for validation to llm and get structured response
+        image_documents = SimpleDirectoryReader(img_dir).load_data()
+
+        llm = mm_gpt4o
+        program = MultiModalLLMCompletionProgram.from_defaults(
+            output_parser=PydanticOutputParser(SlideValidationResult),
+            image_documents=image_documents,
+            prompt_template_str=SLIDE_VALIDATION_PMT,
+            multi_modal_llm=llm,
+            verbose=True,
+        )
+        response = program()
+
+        if response.is_valid:
+            return StopEvent("The slides are fixed!")
+        else:
+            if ctx.data["n_retry"] < self.max_validation_retries:
+                return SlideValidationEvent(result=response)
+            else:
+                return StopEvent(f"The slides are not fixed after {self.max_validation_retries} retries!")
 
     @step(pass_context=True)
-    async def modify_slides(self, ctx: Context, ev: SlideValidationEvent) -> SlideValidationEvent:
+    async def modify_slides(self, ctx: Context, ev: SlideValidationEvent) -> SlideGeneratedEvent:
         """Modify the slides based on the validation feedback"""
+
         # give agent code_interpreter and get_layout tools
         # use feedback as prompt to agent
         # agent make changes to the slides and save slide
-        pass
+        slide_pptx_path = f"/mnt/data/{ctx.data['latest_pptx_file']}"
+        remote_files = self.azure_code_interpreter.list_files()
+        for f in remote_files:
+            if f.filename == self.final_slide_fname:
+                slide_pptx_path = f.file_full_path
+        modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{ctx.data['n_retry']}.pptx"
 
-    # todo: set max retries
-    # todo: make tools common in the workflow
+        agent = ReActAgent.from_tools(
+            tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
+            llm=new_gpt4o(0.1),
+            verbose=True,
+            max_iterations=50
+        )
+        prompt = SLIDE_MODIFICATION_PMT.format(pptx_path=slide_pptx_path,
+                                               feedback=ev.result.suggestion_to_fix,
+                                               modified_pptx_path=modified_pptx_path
+                                               ) + REACT_PROMPT_SUFFIX
+        agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
+        response = agent.chat(f"Modify the slides based on the feedback")
+        self.download_all_files_from_session()
+        return SlideGeneratedEvent(pptx_fpath=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{Path(modified_pptx_path).name}")
 
 
 async def run_workflow(file_dir: str):
@@ -254,8 +319,6 @@ async def run_workflow(file_dir: str):
         timeout=1200, verbose=True)
     result = await wf.run(
         file_dir=file_dir,
-        ppt_template_path="./data/Inmeta Brand guidelines 2023.pptx",
-        final_pptx_fname="paper_summaries.pptx"
     )
     print(result)
 
