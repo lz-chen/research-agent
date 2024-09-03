@@ -18,8 +18,34 @@ def main():
             st.write("Additional options can be placed here.")
         
         st.write("Chat View")
-        # Placeholder for chat messages
-        chat_messages = st.empty()
+
+        # Chat input and message display
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Display existing chat messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # Chat input box
+        if user_input := st.chat_input("Type your message"):
+            # Add user message to chat history
+            st.session_state.messages.append({"role": "user", "content": user_input})
+
+            # Display user message in chat message container
+            with st.chat_message("user"):
+                st.markdown(user_input)
+
+            # Here you can add logic to generate a response from a model or API
+            response = "This is a placeholder response."
+
+            # Add response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+            # Display assistant response in chat message container
+            with st.chat_message("assistant"):
+                st.markdown(response)
 
     with right_column:
         # Placeholder for dynamic content
