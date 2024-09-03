@@ -4,15 +4,13 @@ import logging
 
 from llama_index.core import SimpleDirectoryReader
 
-from prompts import SUMMARIZE_PAPER_PMT
-from services.llms import mm_gpt4o, new_mm_gpt4o
+from backend.prompts.prompts import SUMMARIZE_PAPER_PMT
+from backend.services.llms import new_mm_gpt4o
 import sys
 from llama_index.core import Settings
-from utils.tokens import calculate_cost
+from backend.utils.tokens import calculate_cost
 import tiktoken
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
-from llama_index.multi_modal_llms.openai import OpenAIMultiModal
-
 
 Settings.llm = new_mm_gpt4o()
 

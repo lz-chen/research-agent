@@ -1,10 +1,6 @@
 import asyncio
 import json
-import re
-import string
 from pathlib import Path
-import random
-from typing import Optional, List, Literal
 
 import click
 # import qdrant_client
@@ -24,29 +20,34 @@ import click
 # from llama_parse import LlamaParse
 # from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core import Settings, SimpleDirectoryReader
-from llama_index.core.agent import ReActAgent, FunctionCallingAgentWorker
+from llama_index.core.agent import ReActAgent
 from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import FunctionCallingProgram, MultiModalLLMCompletionProgram
 from llama_index.core.tools import FunctionTool
 
-from config import settings
-from prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, SLIDE_VALIDATION_PMT, \
-    SLIDE_MODIFICATION_PMT
-from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
-from services.embeddings import aoai_embedder
+from backend.config import settings
+from backend.prompts.prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, \
+    SLIDE_VALIDATION_PMT, \
+    SLIDE_MODIFICATION_PMT, MODIFY_SUMMARY2OUTLINE_PMT
+from backend.services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
+from backend.services.embeddings import aoai_embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
-from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step, Event, draw_all_possible_flows
-from pydantic import BaseModel, Field
+from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
 
-from tools import get_all_layouts_info
+from backend.utils.tools import get_all_layouts_info
 
 from llama_index.tools.azure_code_interpreter import (
     AzureCodeInterpreterToolSpec,
 )
 
-from utils.file_processing import pptx2images
+from backend.utils.file_processing import pptx2images
+from backend.workflows.events import *
+
+# SlideOutline, SlideOutlineWithLayout, SlideValidationResult, SummaryEvent, \
+# GetOutlineFeedbackEvent, OutlineEvent, OutlineOkEvent, OutlinesWithLayoutEvent, ConsolidatedOutlineEvent, \
+# SlideGeneratedEvent, SlideValidationEvent)
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -69,65 +70,15 @@ def read_summary_content(file_path: Path):
         return file.read()
 
 
-class SlideOutline(BaseModel):
-    """Slide outline for one page"""
-    title: str = Field(..., description="Title of the slide")
-    content: str = Field(..., description="Main text content of the slide")
-
-
-class SlideOutlineWithLayout(BaseModel):
-    """Slide outline with layout information for one page"""
-    title: str = Field(..., description="Title of the slide")
-    content: str = Field(..., description="Main text content of the slide")
-    layout_name: str = Field(..., description="Name of the page layout to be used for the slide")
-    idx_title_placeholder: str = Field(..., description="Index of the title placeholder in the page layout")
-    idx_content_placeholder: str = Field(..., description="Index of the content placeholder in the page layout")
-
-
-class SlideValidationResult(BaseModel):
-    is_valid: bool
-    suggestion_to_fix: str
-
-
-class SummaryEvent(Event):
-    summary: str
-
-
-class OutlineEvent(Event):
-    outline: SlideOutline
-
-
-class OutlinesWithLayoutEvent(Event):
-    # outline_w_layout: List[SlideOutlineWithLayout]
-    outlines_fpath: Path
-    outline_example: SlideOutlineWithLayout
-
-
-class ConsolidatedOutlineEvent(Event):
-    outlines: List[SlideOutline]
-
-
-class PythonCodeEvent(Event):
-    code: str
-
-
-class SlideGeneratedEvent(Event):
-    pptx_fpath: str  # remote pptx path
-
-
-class SlideValidationEvent(Event):
-    result: SlideValidationResult
-
-
 class SlideGenWorkflow(Workflow):
     max_validation_retries: int = 10
-    slide_template_path: str = "data/Inmeta 2023 template.pptx"
+    slide_template_path: str = "./data/Inmeta 2023 template.pptx"
     final_slide_fname: str = "paper_summaries.pptx"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
-        s = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        # # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
+        # s = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
 
         self.azure_code_interpreter = AzureCodeInterpreterToolSpec(
             pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
@@ -164,43 +115,84 @@ class SlideGenWorkflow(Workflow):
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
-
-        # ctx.data["ppt_template_path"] = ev.get("ppt_template_path")
-        # ctx.data["final_pptx_fname"] = ev.get("final_pptx_fname")
-        ctx.data["n_retry"] = 0
-
+        # ctx.write_event_to_stream(Event(msg="Reading summaries from markdown files..."))
+        ctx.data["n_retry"] = 0  # keep count of slide validation retries
         markdown_files = list(Path(ev.get("file_dir")).glob("*.md"))
-        ctx.data["n_summaries"] = len(markdown_files)
-        for f in markdown_files:
+        ctx.data["n_summaries"] = len(markdown_files)  # make sure later step collect all the summaries
+        for i, f in enumerate(markdown_files):
             s = read_summary_content(f)
+            # ctx.write_event_to_stream(Event(msg=f"Sending {i}th summaries..."))
             self.send_event(SummaryEvent(summary=s))
 
     @step(pass_context=True)
-    async def summary2outline(self, ctx: Context, ev: SummaryEvent) -> OutlineEvent:
-        """Convert the summary content of one paper to slide outline of one page."""
+    async def summary2outline(self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent) -> OutlineEvent:
+        """Convert the summary content of one paper to slide outline of one page, mainly
+        condense and shorten the elaborated summary content to short sentences or bullet points."""
+        # ctx.write_event_to_stream(Event(msg="Making summary to slide outline..."))
         llm = new_gpt4o_mini(0.1)
-        program = FunctionCallingProgram.from_defaults(
-            llm=llm,
-            output_cls=SlideOutline,
-            prompt_template_str=SUMMARY2OUTLINE_PMT,
-            verbose=True,
-        )
-        response = await program.acall(
-            summary=ev.summary,
-            description="Data model for the slide page outline",
-        )
-        # response = await llm.acomplete(prompt.format(summary=ev.summary))
-        return OutlineEvent(outline=response)
+        if isinstance(ev, OutlineFeedbackEvent):
+            # pmt = MODIFY_SUMMARY2OUTLINE_PMT.format(summary_txt=ev.summary,
+            #                                         outline_txt=ev.outline.json(),
+            #                                         feedback=ev.feedback)
+            program = FunctionCallingProgram.from_defaults(
+                llm=llm,
+                output_cls=SlideOutline,
+                prompt_template_str=MODIFY_SUMMARY2OUTLINE_PMT,
+                verbose=True,
+            )
+            response = await program.acall(
+                summary_txt=ev.summary,
+                outline_txt=ev.outline.json(),
+                feedback=ev.feedback,
+                description="Data model for the slide page outline",
+            )
+
+        else:
+            program = FunctionCallingProgram.from_defaults(
+                llm=llm,
+                output_cls=SlideOutline,
+                prompt_template_str=SUMMARY2OUTLINE_PMT,
+                verbose=True,
+            )
+            response = await program.acall(
+                summary=ev.summary,
+                description="Data model for the slide page outline",
+            )
+        # async for response in generator:
+        #     # Allow the workflow to stream this piece of response
+        #     ctx.write_event_to_stream(Event(msg=response))
+        return OutlineEvent(summary=ev.summary,
+                            outline=response)
 
     @step(pass_context=True)
-    async def outlines_with_layout(self, ctx: Context, ev: OutlineEvent) -> OutlinesWithLayoutEvent:
+    async def gather_feedback_outline(self, ctx: Context, ev: OutlineEvent) -> OutlineFeedbackEvent | OutlineOkEvent:
+        """Present user the original paper summary and the outlines generated, gather feedback from user"""
+        # ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
+        print(f"the original summary is: {ev.summary}")
+        print(f"the outline is: {ev.outline}")
+        print("Do you want to proceed with this outline? (yes/no):")
+        feedback = input()
+        if feedback.lower().strip() in ["yes", "y"]:
+            return OutlineOkEvent(summary=ev.summary,
+                                  outline=ev.outline)
+        else:
+            print("Please provide feedback on the outline:")
+            feedback = input()
+            return OutlineFeedbackEvent(
+                summary=ev.summary,
+                outline=ev.outline,
+                feedback=feedback)
+
+    @step(pass_context=True)
+    async def outlines_with_layout(self, ctx: Context, ev: OutlineOkEvent) -> OutlinesWithLayoutEvent:
         """Given a list of slide page outlines, augment each outline with layout information.
         The layout information includes the layout name, the index of the title placeholder,
         and the index of the content placeholder. Return an event with the augmented outlines.
         """
-        ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
+        ready = ctx.collect_events(ev, [OutlineOkEvent] * ctx.data["n_summaries"])
         if ready is None:
             return None
+        # ctx.write_event_to_stream(Event(msg="Outlines for all paper is ready! Adding layout info..."))
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
 
         # add layout to outline

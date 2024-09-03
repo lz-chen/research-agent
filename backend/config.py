@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     WORKFLOW_ARTIFACTS_PATH: str
 
     class Config:
-        env_file = ".env"
+        env_file = ".env"  # relative to execution path
 
 
 settings = Settings()

@@ -109,11 +109,8 @@ Ensure that the summary is clear and concise, avoiding unnecessary jargon or ove
 
 """
 
-SUMMARY2OUTLINE_PMT = """
-You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
-You will receive a markdown string that contains the summary of papers and 
-you will generate a slide outlines for each paper.
-Requirements:
+summary2outline_requriements = """
+
 - Use the paper title as the slide title
 - Use the summary in the markdown file as the slide content, convert the markdown headings to
  bullet points by prepending each heading text with a bullet (* or -). You can choose to maintain
@@ -121,9 +118,24 @@ Requirements:
 - Rephrase the content to make it more concise, and straight to the point
 - Each bullet point should be less than 15 words
 - A paragraph of text in the slide should be less than 25 words.
+"""
+
+SUMMARY2OUTLINE_PMT = """
+You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
+You will receive a markdown string that contains the summary of papers and 
+you will generate a slide outlines for each paper.
+Requirements:""" + summary2outline_requriements + """
 
 Here is the markdown content: {summary} 
 """
+
+MODIFY_SUMMARY2OUTLINE_PMT = """
+You are an AI that modifies the slide outlines generated according to given user feedback.
+The original summary is '''{summary_txt}'''.
+Previously generated outline is '''{outline_txt}'''.
+The feedback provided is: '''{feedback}'''.
+Please modify the outline based on the feedback and provide the updated outline, respecting
+ the original requirements:""" + summary2outline_requriements
 
 AUGMENT_LAYOUT_PMT = """
 You are an AI that selects slide layout from a template for the slide text given.
