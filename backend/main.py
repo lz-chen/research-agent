@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+
+app = FastAPI()
 import asyncio
 from backend.workflows.slide_gen_agent import run_workflow
 
