@@ -10,8 +10,8 @@ services:
       - "8000:80"
     networks:
       - app-network
-    env_file:
-      - ./backend/.env
+    volumes:
+      - .env:/app/.env
 
   frontend:
     build:

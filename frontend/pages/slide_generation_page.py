@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+import sseclient
+
 
 
 def main():
@@ -8,14 +10,16 @@ def main():
     # Sidebar with form
     with st.sidebar:
         with st.form(key='slide_gen_form'):
-            file_dir = st.text_input("Enter the directory path for slide generation:")
+            file_dir = st.text_input("Enter the directory path for slide generation:",
+                                     value="./data/summaries_test",
+                                     placeholder="./data/summaries_test")
             submit_button = st.form_submit_button(label='Submit')
 
     # Main view divided into two columns
     left_column, right_column = st.columns(2)
 
     with left_column:
-        with st.expander("Options"):
+        with st.expander("Workflow execution Status"):
             st.write("Additional options can be placed here.")
         
         st.write("Chat View")
@@ -53,12 +57,19 @@ def main():
         dynamic_content = st.empty()
         if submit_button:
             # Send a request to the backend
-            response = requests.post("http://backend:80/run-slide-gen", json={"file_dir": file_dir})
+            with st.empty():
+                response = requests.post("http://backend:80/run-slide-gen", json={"path": file_dir})
+                client = sseclient.SSEClient(response)
 
-            if response.status_code == 200:
-                dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
-            else:
-                dynamic_content.markdown("Failed to send request to backend.")
+                full_response = ""
+                for event in client.events():
+                    full_response += event.data
+                    st.write(full_response)
+
+                # if response.status_code == 200:
+                #     dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
+                # else:
+                #     dynamic_content.markdown("Failed to send request to backend.")
 
 
 main()

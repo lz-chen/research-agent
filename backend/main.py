@@ -3,7 +3,7 @@ import asyncio
 from fastapi.responses import StreamingResponse
 
 from models import SlideGenFileDirectory
-from workflows.slide_gen_agent import run_workflow, SlideGenWorkflow
+from workflows.slide_gen_agent import SlideGenWorkflow
 
 app = FastAPI()
 

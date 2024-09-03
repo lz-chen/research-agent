@@ -23,9 +23,9 @@ from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreI
 from llama_index.core import Settings
 from config import settings
 from prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
-from backend.services.llms import llm_gpt4o
-from backend.services.embeddings import aoai_embedder
-from backend.utils.visualization import visualize_nodes_with_attributes
+from services.llms import llm_gpt4o
+from services.embeddings import aoai_embedder
+from utils.visualization import visualize_nodes_with_attributes
 import logging
 import sys
 from llama_index.core import PromptTemplate

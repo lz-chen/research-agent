@@ -12,7 +12,7 @@ import arxiv
 from semanticscholar import SemanticScholar
 from prompts import IS_CITATION_RELEVANT_PMT
 
-from backend.services import llms
+from services import llms
 import logging
 import sys
 

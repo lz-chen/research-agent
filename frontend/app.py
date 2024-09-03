@@ -1,11 +1,9 @@
 import streamlit as st
-from pages.hello import hello
 
 
-### SUPPORTING FUNCTIONS
 def main_page():
     st.set_page_config(
-        page_title="Eksempel AI Use-Case",
+        page_title="Paper research and slide generation",
         page_icon="🤖",
         layout="wide",
         initial_sidebar_state="expanded",  # expand side bar (horizontally)

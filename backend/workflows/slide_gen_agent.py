@@ -25,25 +25,25 @@ from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import FunctionCallingProgram, MultiModalLLMCompletionProgram
 from llama_index.core.tools import FunctionTool
 
-from backend.config import settings
-from backend.prompts.prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, \
+from config import settings
+from prompts.prompts import SLIDE_GEN_PMT, REACT_PROMPT_SUFFIX, SUMMARY2OUTLINE_PMT, AUGMENT_LAYOUT_PMT, \
     SLIDE_VALIDATION_PMT, \
     SLIDE_MODIFICATION_PMT, MODIFY_SUMMARY2OUTLINE_PMT
-from backend.services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
-from backend.services.embeddings import aoai_embedder
+from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
+from services.embeddings import aoai_embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
-from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
+from llama_index.core.workflow import Context, Event, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
 
-from backend.utils.tools import get_all_layouts_info
+from utils.tools import get_all_layouts_info
 
 from llama_index.tools.azure_code_interpreter import (
     AzureCodeInterpreterToolSpec,
 )
 
-from backend.utils.file_processing import pptx2images
-from backend.workflows.events import *
+from utils.file_processing import pptx2images
+from workflows.events import *
 
 # SlideOutline, SlideOutlineWithLayout, SlideValidationResult, SummaryEvent, \
 # GetOutlineFeedbackEvent, OutlineEvent, OutlineOkEvent, OutlinesWithLayoutEvent, ConsolidatedOutlineEvent, \
@@ -115,25 +115,22 @@ class SlideGenWorkflow(Workflow):
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
-        # ctx.write_event_to_stream(Event(msg="Reading summaries from markdown files..."))
+        ctx.write_event_to_stream(Event(msg="Reading summaries from markdown files..."))
         ctx.data["n_retry"] = 0  # keep count of slide validation retries
         markdown_files = list(Path(ev.get("file_dir")).glob("*.md"))
         ctx.data["n_summaries"] = len(markdown_files)  # make sure later step collect all the summaries
         for i, f in enumerate(markdown_files):
             s = read_summary_content(f)
-            # ctx.write_event_to_stream(Event(msg=f"Sending {i}th summaries..."))
+            ctx.write_event_to_stream(Event(msg=f"Sending {i}th summaries..."))
             self.send_event(SummaryEvent(summary=s))
 
     @step(pass_context=True)
     async def summary2outline(self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent) -> OutlineEvent:
         """Convert the summary content of one paper to slide outline of one page, mainly
         condense and shorten the elaborated summary content to short sentences or bullet points."""
-        # ctx.write_event_to_stream(Event(msg="Making summary to slide outline..."))
+        ctx.write_event_to_stream(Event(msg="Making summary to slide outline..."))
         llm = new_gpt4o_mini(0.1)
         if isinstance(ev, OutlineFeedbackEvent):
-            # pmt = MODIFY_SUMMARY2OUTLINE_PMT.format(summary_txt=ev.summary,
-            #                                         outline_txt=ev.outline.json(),
-            #                                         feedback=ev.feedback)
             program = FunctionCallingProgram.from_defaults(
                 llm=llm,
                 output_cls=SlideOutline,
