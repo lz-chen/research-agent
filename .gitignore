@@ -175,4 +175,14 @@ outputs/*
 **.aider**
 /workflow_artifacts/
 
-**__pycache__**
+**__pycache__**__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/

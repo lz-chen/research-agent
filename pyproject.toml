@@ -38,3 +38,8 @@ pymupdf = "^1.24.9"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.68.0"
+uvicorn = "^0.15.0"
+streamlit = "^0.86.0"
