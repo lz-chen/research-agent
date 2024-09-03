@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 import asyncio
 
-from models import SlideGenFileDirectory
+from backend.models import SlideGenFileDirectory
 from workflows.slide_gen_agent import run_workflow
 
 app = FastAPI()
