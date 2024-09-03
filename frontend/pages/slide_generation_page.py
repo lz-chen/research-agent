@@ -58,13 +58,11 @@ def main():
         if submit_button:
             # Send a request to the backend
             with st.empty():
-                response = requests.post("http://backend:80/run-slide-gen", json={"path": file_dir})
+                response = requests.post("http://backend:80/run-slide-gen", json={"path": file_dir}, stream=True)
                 client = sseclient.SSEClient(response)
 
-                full_response = ""
                 for event in client.events():
-                    full_response += event.data
-                    st.write(full_response)
+                    st.write(event.data)
 
                 # if response.status_code == 200:
                 #     dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
