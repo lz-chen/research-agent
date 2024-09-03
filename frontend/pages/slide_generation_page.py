@@ -53,7 +53,7 @@ def main():
         dynamic_content = st.empty()
         if submit_button:
             # Send a request to the backend
-            response = requests.post("http://backend-url/slide-generation", json={"file_dir": file_dir})
+            response = requests.post("http://backend-url/run-workflow", json={"file_dir": file_dir})
 
             if response.status_code == 200:
                 dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
