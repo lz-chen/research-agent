@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "8000:80"
     networks:
       - app-network
 
@@ -19,21 +19,3 @@ services:
 
 networks:
   app-network:
-version: '3.8'
-
-services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "8501:8501"
-    depends_on:
-      - backend
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:80"
