@@ -1,16 +1,14 @@
 import streamlit as st
 
+import streamlit as st
+from pages.main_page import main as main_page
+from pages.slide_generation_page import main as slide_generation_page
+
 # Sidebar for navigation
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Main Page", "Slide Generation"])
 
 if page == "Main Page":
-    st.title("Main Page")
-    st.write("Welcome to the main page of the Streamlit app.")
+    main_page()
 elif page == "Slide Generation":
-    st.title("Slide Generation")
-    st.write("This is the slide generation page.")
-    file_dir = st.text_input("Enter the directory path for slide generation:")
-    if st.button("Generate Slides"):
-        st.write(f"Slides will be generated for the directory: {file_dir}")
-        # Here you would typically call the backend API to trigger slide generation
+    slide_generation_page()
