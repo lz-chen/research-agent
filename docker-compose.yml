@@ -4,6 +4,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        - --no-cache
     ports:
       - "8000:80"
     networks:
@@ -12,6 +14,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        - --no-cache
     ports:
       - "8501:8501"
     networks:
