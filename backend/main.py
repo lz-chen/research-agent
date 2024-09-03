@@ -12,10 +12,11 @@ app = FastAPI()
 async def run_workflow_endpoint(file_dir: SlideGenFileDirectory):
     wf = SlideGenWorkflow(timeout=1200, verbose=True)
 
-    def generate():
+    async def generate():
         task = asyncio.create_task(wf.run(file_dir=file_dir.path))
         async for ev in wf.stream_events():
-            yield ev.msg
+            yield f"data: {ev.msg}\n\n"
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
     # def generate():
