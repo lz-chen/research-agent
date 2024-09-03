@@ -1,4 +1,5 @@
 import streamlit as st
+from pages.hello import hello
 
 
 ### SUPPORTING FUNCTIONS
