@@ -1,6 +1,14 @@
 from fastapi import FastAPI, HTTPException
+import asyncio
+from backend.workflows.slide_gen_agent import run_workflow
 
-app = FastAPI()
+@app.post("/run-workflow/")
+async def run_workflow_endpoint(file_dir: str):
+    try:
+        asyncio.run(run_workflow(file_dir))
+        return {"status": "Workflow completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/items/{item_id}")
 async def read_item(item_id: int, q: str = None):
