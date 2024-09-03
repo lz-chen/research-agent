@@ -1,14 +1,25 @@
 import streamlit as st
 
-import streamlit as st
-from pages.main_page import main as main_page
-from pages.slide_generation_page import main as slide_generation_page
 
-# Sidebar for navigation
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Main Page", "Slide Generation"])
+### SUPPORTING FUNCTIONS
+def main_page():
+    st.set_page_config(
+        page_title="Eksempel AI Use-Case",
+        page_icon="🤖",
+        layout="wide",
+        initial_sidebar_state="expanded",  # expand side bar (horizontally)
+    )
 
-if page == "Main Page":
+    # # add_logo()
+    # st.logo("logo.png")
+
+    main_page = st.Page("pages/main_page.py", title="🏠 Home")
+    slide_gen_page = st.Page("pages/slide_generation_page.py", title="🧾 Slide Generation")
+    # chat_page = st.Page("app_pages/chat.py", title="💬 Chat")
+    pg = st.navigation([main_page, slide_gen_page])
+
+    pg.run()
+
+
+if __name__ == "__main__":
     main_page()
-elif page == "Slide Generation":
-    slide_generation_page()
