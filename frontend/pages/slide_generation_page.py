@@ -1,4 +1,5 @@
 import streamlit as st
+import requests
 
 
 def main():
@@ -51,8 +52,13 @@ def main():
         # Placeholder for dynamic content
         dynamic_content = st.empty()
         if submit_button:
-            dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
-            # Here you would typically call the backend API to trigger slide generation
+            # Send a request to the backend
+            response = requests.post("http://backend-url/slide-generation", json={"file_dir": file_dir})
+
+            if response.status_code == 200:
+                dynamic_content.markdown(f"Slides will be generated for the directory: {file_dir}")
+            else:
+                dynamic_content.markdown("Failed to send request to backend.")
 
 
 main()
