@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def main():
     st.title("Slide Generation")
     st.write("This is the slide generation page.")
@@ -7,3 +8,6 @@ def main():
     if st.button("Generate Slides"):
         st.write(f"Slides will be generated for the directory: {file_dir}")
         # Here you would typically call the backend API to trigger slide generation
+
+
+main()
