@@ -1,10 +1,13 @@
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY ./requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+COPY . /app
 
-COPY ./app.py /app/app.py
+RUN pip install poetry
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+RUN poetry install
+
+EXPOSE 80
+
+CMD ["poetry", "run", "streamlit", "run", "app.py"]
