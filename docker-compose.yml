@@ -6,9 +6,16 @@ services:
       context: ./backend
     ports:
       - "8000:8000"
+    networks:
+      - app-network
 
   frontend:
     build:
       context: ./frontend
     ports:
       - "8501:8501"
+    networks:
+      - app-network
+
+networks:
+  app-network:
