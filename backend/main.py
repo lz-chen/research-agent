@@ -34,3 +34,11 @@ app = FastAPI()
 @app.get("/")
 async def read_root():
     return {"Hello": "World"}
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.post("/run-slide-gen")
+async def run_slide_gen(file_dir: str):
+    # Placeholder logic for slide generation
+    return {"message": f"Slides will be generated for the directory: {file_dir}"}
