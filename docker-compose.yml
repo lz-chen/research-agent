@@ -12,6 +12,8 @@ services:
       - app-network
     volumes:
       - .env:/app/.env
+      - ./data:/app/data
+      - ./workflow_artifacts:/app/workflow_artifacts
 
   frontend:
     build:

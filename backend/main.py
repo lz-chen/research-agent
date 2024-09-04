@@ -4,6 +4,9 @@ from fastapi.responses import StreamingResponse
 
 from models import SlideGenFileDirectory
 from workflows.slide_gen_agent import SlideGenWorkflow
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import asyncio
 
 app = FastAPI()
 
@@ -12,36 +15,14 @@ app = FastAPI()
 async def run_workflow_endpoint(file_dir: SlideGenFileDirectory):
     wf = SlideGenWorkflow(timeout=1200, verbose=True)
 
-    async def generate():
+    async def event_generator():
         task = asyncio.create_task(wf.run(file_dir=file_dir.path))
         async for ev in wf.stream_events():
+            print(f"backend streaming event: {ev.msg}")
             yield f"data: {ev.msg}\n\n"
+            await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
-
-    # def generate():
-    #     streaming_response = wf.run(
-    #         file_dir=file_dir.path,
-    #     )
-    #     for text in streaming_response.:
-    #         yield f"data: {text}\n\n"
-    #
-    # return StreamingResponse(generate(), media_type="text/event-stream")
-    # def generate():
-    #     response = await run_workflow(file_dir.path)
-    #     for text in response.response_gen:
-    #         yield f"data: {text}\n\n"
-    #
-    #
-    # try:
-    #     response = await run_workflow(file_dir.path)
-    #     async for token in response:
-    #         print(token.delta, end="", flush=True)
-    #     # return {"status": "Workflow completed successfully"}
-    #     return StreamingResponse(generate(), media_type="text/event-stream")
-    #
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/items/{item_id}")

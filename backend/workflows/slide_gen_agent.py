@@ -168,13 +168,15 @@ class SlideGenWorkflow(Workflow):
         print(f"the original summary is: {ev.summary}")
         print(f"the outline is: {ev.outline}")
         print("Do you want to proceed with this outline? (yes/no):")
-        feedback = input()
+        # feedback = input()
+        feedback = "yes"
         if feedback.lower().strip() in ["yes", "y"]:
             return OutlineOkEvent(summary=ev.summary,
                                   outline=ev.outline)
         else:
             print("Please provide feedback on the outline:")
-            feedback = input()
+            # feedback = input()
+            feedback = "The outline is too verbose, please make it more concise."
             return OutlineFeedbackEvent(
                 summary=ev.summary,
                 outline=ev.outline,
