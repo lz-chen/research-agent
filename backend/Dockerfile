@@ -12,7 +12,8 @@ RUN poetry config virtualenvs.create false && poetry install --no-root
 RUN apt-get update && \
     apt-get install -y curl sudo && \
     curl -L https://aka.ms/InstallAzureCli | sudo bash && \
-    sudo apt-get update && sudo apt-get install --only-upgrade -y azure-cli
+    sudo apt-get update && sudo apt-get install --only-upgrade -y azure-cli && \
+    az --version  # Test if Azure CLI is available
 
 COPY . /app
 
