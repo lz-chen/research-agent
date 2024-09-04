@@ -10,15 +10,17 @@ async def fetch_streaming_data(url: str, payload: dict = None):
             # Iterating through the streamed lines
             async for line in response.aiter_lines():
                 if line:
-                    print(f"Received line: {line}")  # Debugging print
+                    # print(f"Received line: {line}")  # Debugging print
                     yield line
 
 
-async def get_stream_data(url, payload, result_placeholder=None):
+async def get_stream_data(url, payload, expander_placeholder):
     async for line in fetch_streaming_data(url, payload):
-        result_placeholder = st.empty()
-        print(f"Displaying line: {line}")  # Debugging print
-        result_placeholder.write(line)  # Updating the UI with each streamed line
+        # print(f"Displaying line: {line}")  # Debugging print
+        with expander_placeholder:
+            # Create a new empty placeholder for each message
+            new_message_placeholder = st.empty()
+            new_message_placeholder.write(line)  # Display the new message
 
 
 def main():
@@ -36,8 +38,9 @@ def main():
     left_column, right_column = st.columns(2)
 
     with left_column:
-        with st.expander("Workflow execution Status"):
-            st.write("Additional options can be placed here.")
+        expander_placeholder = st.expander("🤖⚒️Agent is working...")
+        # with st.expander("🤖⚒️Agent is working...") as expander_placeholder:
+        #     st.write("Workflow execution status:")
 
         st.write("Chat View")
 
@@ -70,12 +73,12 @@ def main():
                 st.markdown(response)
 
     with right_column:
-        # Placeholder for dynamic content
-        dynamic_content = st.empty()
-        if submit_button:
-            asyncio.run(get_stream_data("http://backend:80/run-slide-gen",
-                                        {"path": "./data/summaries_test"}
-                                        ))
+        st.write("Artifacts generated:")
+
+    if submit_button:
+        asyncio.run(get_stream_data("http://backend:80/run-slide-gen",
+                                    {"path": "./data/summaries_test"},
+                                    expander_placeholder))
 
 
 main()
