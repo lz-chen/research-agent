@@ -37,7 +37,7 @@ from llama_index.core import PromptTemplate
 from llama_index.core.workflow import Context, Event, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
 
 from utils.tools import get_all_layouts_info
-
+import inspect
 from llama_index.tools.azure_code_interpreter import (
     AzureCodeInterpreterToolSpec,
 )
@@ -115,20 +115,23 @@ class SlideGenWorkflow(Workflow):
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
-        ctx.write_event_to_stream(Event(msg="Reading summaries from markdown files..."))
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] Reading summaries from markdown files..."))
         ctx.data["n_retry"] = 0  # keep count of slide validation retries
         markdown_files = list(Path(ev.get("file_dir")).glob("*.md"))
         ctx.data["n_summaries"] = len(markdown_files)  # make sure later step collect all the summaries
         for i, f in enumerate(markdown_files):
             s = read_summary_content(f)
-            ctx.write_event_to_stream(Event(msg=f"Sending {i}th summaries..."))
+            ctx.write_event_to_stream(
+                Event(msg=f"[{inspect.currentframe().f_code.co_name}] Sending {i}th summaries..."))
             self.send_event(SummaryEvent(summary=s))
 
     @step(pass_context=True)
     async def summary2outline(self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent) -> OutlineEvent:
         """Convert the summary content of one paper to slide outline of one page, mainly
         condense and shorten the elaborated summary content to short sentences or bullet points."""
-        ctx.write_event_to_stream(Event(msg="Making summary to slide outline..."))
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] Making summary to slide outline..."))
         llm = new_gpt4o_mini(0.1)
         if isinstance(ev, OutlineFeedbackEvent):
             program = FunctionCallingProgram.from_defaults(
@@ -157,7 +160,11 @@ class SlideGenWorkflow(Workflow):
             )
         # async for response in generator:
         #     # Allow the workflow to stream this piece of response
-        #     ctx.write_event_to_stream(Event(msg=response))
+        json_resp = {"original_summary": ev.summary}
+        json_resp.update(json.loads(response.json()))
+
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}]/json: {json.dumps(json_resp)}"))
         return OutlineEvent(summary=ev.summary,
                             outline=response)
 
@@ -165,6 +172,9 @@ class SlideGenWorkflow(Workflow):
     async def gather_feedback_outline(self, ctx: Context, ev: OutlineEvent) -> OutlineFeedbackEvent | OutlineOkEvent:
         """Present user the original paper summary and the outlines generated, gather feedback from user"""
         # ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] Gathering feedback on the outline..."))
+
         print(f"the original summary is: {ev.summary}")
         print(f"the outline is: {ev.outline}")
         print("Do you want to proceed with this outline? (yes/no):")
@@ -191,7 +201,8 @@ class SlideGenWorkflow(Workflow):
         ready = ctx.collect_events(ev, [OutlineOkEvent] * ctx.data["n_summaries"])
         if ready is None:
             return None
-        # ctx.write_event_to_stream(Event(msg="Outlines for all paper is ready! Adding layout info..."))
+        ctx.write_event_to_stream(Event(
+            msg=f"[{inspect.currentframe().f_code.co_name}] Outlines for all paper is ready! Adding layout info..."))
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
 
         # add layout to outline
@@ -210,7 +221,7 @@ class SlideGenWorkflow(Workflow):
                 available_layouts=self.all_layout,
                 description="Data model for the slide page outline with layout",
             )
-            slides_w_layout.append(response)
+        slides_w_layout.append(response)
 
         # store the slide outlines as json file
         slide_outlines_json = Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath("slide_outlines.json")

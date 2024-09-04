@@ -1,3 +1,5 @@
+import json
+
 import streamlit as st
 import httpx
 import asyncio
@@ -17,10 +19,29 @@ async def fetch_streaming_data(url: str, payload: dict = None):
 async def get_stream_data(url, payload, expander_placeholder):
     async for line in fetch_streaming_data(url, payload):
         # print(f"Displaying line: {line}")  # Debugging print
+
+        # if line.startswith("[summary2outline]/json"):
+        #     # Extract JSON data from the line
+        #     json_data = json.loads(line.split("/json: ")[-1])
+        #     show_outline(json_data)
+        # else:
         with expander_placeholder:
             # Create a new empty placeholder for each message
             new_message_placeholder = st.empty()
             new_message_placeholder.write(line)  # Display the new message
+
+
+@st.dialog("Provide feedback to the slide outline")
+def show_outline(slide_outline):
+    st.json(slide_outline)
+    feedback = st.text_input("What do you think about this outline?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Approve"):
+            st.write("Outline approved!")
+    with col2:
+        if st.button("Reject"):
+            st.write("Outline rejected!")
 
 
 def main():
@@ -39,8 +60,6 @@ def main():
 
     with left_column:
         expander_placeholder = st.expander("🤖⚒️Agent is working...")
-        # with st.expander("🤖⚒️Agent is working...") as expander_placeholder:
-        #     st.write("Workflow execution status:")
 
         st.write("Chat View")
 

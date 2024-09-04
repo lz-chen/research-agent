@@ -35,6 +35,7 @@ python-pptx = "^1.0.2"
 pymupdf = "^1.24.9"
 fastapi = "^0.112.2"
 uvicorn = "^0.30.6"
+azure-cli= "^2.64.0"
 
 [build-system]
 requires = ["poetry-core"]

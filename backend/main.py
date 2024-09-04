@@ -18,8 +18,8 @@ async def run_workflow_endpoint(file_dir: SlideGenFileDirectory):
     async def event_generator():
         task = asyncio.create_task(wf.run(file_dir=file_dir.path))
         async for ev in wf.stream_events():
-            print(f"backend streaming event: {ev.msg}")
-            yield f"data: {ev.msg}\n\n"
+            # print(f"backend streaming event: {ev.msg}")
+            yield f"{ev.msg}\n\n"
             await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
