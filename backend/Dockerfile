@@ -17,6 +17,10 @@ RUN apt-get update && \
     sudo apt-get update && sudo apt-get install --only-upgrade -y azure-cli && \
     az --version  # Test if Azure CLI is available
 
+# Install unoconv and its dependencies
+RUN apt-get update && \
+    apt-get install -y unoconv libreoffice
+
 
 COPY . /app
 
