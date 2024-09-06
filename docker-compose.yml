@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        - --no-cache
+    ports:
+      - "8000:80"
+    networks:
+      - app-network
+    volumes:
+      - .env:/app/.env
+      - ./data:/app/data
+      - ./workflow_artifacts:/app/workflow_artifacts
+      - ~/.azure:/root/.azure
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - --no-cache
+    ports:
+      - "8501:8501"
+    networks:
+      - app-network
+
+networks:
+  app-network:

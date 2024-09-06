@@ -1,6 +1,6 @@
 from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
 
-from backend.config import settings
+from config import settings
 
 aoai_embedder = AzureOpenAIEmbedding(
     model=settings.AZURE_OPENAI_EMBEDDING_MODEL,

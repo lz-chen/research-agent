@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "frontend"
+version = "0.1.0"
+description = "Frontend for the research agent"
+authors = ["lz-chen <lingzhen.chen@inmeta.no>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+streamlit = "^1.38.0"
+sseclient = "^0.0.27"
+httpx = "^0.27.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

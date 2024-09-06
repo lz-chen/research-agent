@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "research-agent"
+name = "backend"
 version = "0.1.0"
-description = ""
+description = "Backend for the research agent"
 authors = ["lz-chen <lingzhen.chen@inmeta.no>"]
 readme = "README.md"
 
@@ -33,13 +33,10 @@ pyvis = "^0.3.2"
 llama-index-tools-azure-code-interpreter = "^0.3.0"
 python-pptx = "^1.0.2"
 pymupdf = "^1.24.9"
-
+fastapi = "^0.112.2"
+uvicorn = "^0.30.6"
+azure-cli= "^2.64.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-[tool.poetry.dependencies]
-python = "^3.9"
-fastapi = "^0.68.0"
-uvicorn = "^0.15.0"
-streamlit = "^0.86.0"

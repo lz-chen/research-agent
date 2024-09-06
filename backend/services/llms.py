@@ -1,7 +1,7 @@
 from llama_index.llms.azure_openai import AzureOpenAI
 from llama_index.multi_modal_llms.azure_openai import AzureOpenAIMultiModal
 
-from backend.config import settings
+from config import settings
 
 llm_gpt4o = AzureOpenAI(
     azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
