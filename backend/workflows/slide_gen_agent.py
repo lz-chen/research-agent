@@ -1,5 +1,7 @@
 import asyncio
 import json
+import random
+import string
 from pathlib import Path
 
 import click
@@ -45,9 +47,6 @@ from llama_index.tools.azure_code_interpreter import (
 from utils.file_processing import pptx2images
 from workflows.events import *
 
-# SlideOutline, SlideOutlineWithLayout, SlideValidationResult, SummaryEvent, \
-# GetOutlineFeedbackEvent, OutlineEvent, OutlineOkEvent, OutlinesWithLayoutEvent, ConsolidatedOutlineEvent, \
-# SlideGeneratedEvent, SlideValidationEvent)
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -74,15 +73,18 @@ class SlideGenWorkflow(Workflow):
     max_validation_retries: int = 10
     slide_template_path: str = "./data/Inmeta 2023 template.pptx"
     final_slide_fname: str = "paper_summaries.pptx"
+    slide_outlines_fname: str = "slide_outlines.json"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
-        # s = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
+        s = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        self.workflow_artifacts_path = Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath(s)
+        self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
         self.azure_code_interpreter = AzureCodeInterpreterToolSpec(
             pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
-            local_save_path=settings.WORKFLOW_ARTIFACTS_PATH,
+            local_save_path=self.workflow_artifacts_path.as_posix(),
         )
         spec_functions = ["code_interpreter", "list_files", "upload_file"]
         self.azure_code_interpreter.spec_functions = spec_functions
@@ -101,7 +103,7 @@ class SlideGenWorkflow(Workflow):
         local_files = []
         for f in remote_files:
             logging.info(f"Downloading remote file: {f.file_full_path}")
-            local_path = f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}"
+            local_path = f"{self.workflow_artifacts_path.as_posix()}/{f.filename}"
             self.azure_code_interpreter.download_file_to_local(
                 remote_file_path=f.file_full_path,
                 local_file_path=local_path,
@@ -109,11 +111,27 @@ class SlideGenWorkflow(Workflow):
             local_files.append(local_path)
         return local_files
 
-    @staticmethod
-    def save_python_code(code: str):
+    def save_python_code(self, code: str):
         """Save the python code to file"""
-        with open(f"{settings.WORKFLOW_ARTIFACTS_PATH}/code.py", "w") as f:
+        with open(f"{self.workflow_artifacts_path}/code.py", "w") as f:
             f.write(code)
+
+    @staticmethod
+    def _agent_thought_to_stream(ctx, agent_task):
+        cur_reasonings = agent_task.extra_state['current_reasoning']
+        for r in cur_reasonings:
+            ctx.write_event_to_stream(
+                Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Reasoning: {r.get_content()}"))
+
+    def run_react_agent(self, agent, task, ctx):
+        step_output = agent.run_step(task.task_id)
+        self._agent_thought_to_stream(ctx, task)
+        while not step_output.is_last:
+            step_output = agent.run_step(task.task_id)
+            self._agent_thought_to_stream(ctx, task)
+        response = agent.finalize_response(task.task_id)
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Final Response: {response}"))
 
     @step(pass_context=True, num_workers=4)
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
@@ -225,13 +243,16 @@ class SlideGenWorkflow(Workflow):
                 available_layouts=self.all_layout,
                 description="Data model for the slide page outline with layout",
             )
-        slides_w_layout.append(response)
+            slides_w_layout.append(response)
 
         # store the slide outlines as json file
-        slide_outlines_json = Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath("slide_outlines.json")
+        slide_outlines_json = self.workflow_artifacts_path.joinpath(self.slide_outlines_fname)
         with slide_outlines_json.open("w") as f:
             json.dump([o.json() for o in slides_w_layout], f, indent=4)
-        ctx.data["slide_outlines_json"] = slide_outlines_json
+        # ctx.data["slide_outlines_json"] = slide_outlines_json
+        ctx.write_event_to_stream(Event(
+            msg=f"[{inspect.currentframe().f_code.co_name}] {len(slides_w_layout)} outlines with layout are ready!"
+                f" Stored in {slide_outlines_json}"))
 
         return OutlinesWithLayoutEvent(outlines_fpath=slide_outlines_json,
                                        outline_example=slides_w_layout[0])
@@ -256,30 +277,13 @@ class SlideGenWorkflow(Workflow):
         )
         logging.info(f"Uploaded file to Azure: {res}")
 
-        # response = agent.chat(f"An example of outline item in json is {ev.outline_example.json()},"
-        #                       f" generate a slide deck")
         task = agent.create_task(f"An example of outline item in json is {ev.outline_example.json()},"
                                  f" generate a slide deck")
-        step_output = agent.run_step(task.task_id)
-        ctx.write_event_to_stream(
-            Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Step output: {step_output}"))
-        while not step_output.is_last:
-            step_output = agent.run_step(task.task_id)
-            cur_reasonings = task.extra_state['current_reasoning']
-            for r in cur_reasonings:
-                ctx.write_event_to_stream(
-                    Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Reasoning: {r.get_content()}"))
-            # ctx.write_event_to_stream(
-            #     Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Step output: {step_output}"))
-
-        response = agent.finalize_response(task.task_id)
-        ctx.write_event_to_stream(
-            Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Final Response: {response}"))
-
+        self.run_react_agent(agent, task, ctx)
         local_files = self.download_all_files_from_session()
         ctx.write_event_to_stream(
             Event(msg=f"[{inspect.currentframe().f_code.co_name}] Downloaded files to local path: {local_files}"))
-        return SlideGeneratedEvent(pptx_fpath=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{self.final_slide_fname}")
+        return SlideGeneratedEvent(pptx_fpath=f"{self.workflow_artifacts_path}/{self.final_slide_fname}")
 
     @step(pass_context=True)
     async def validate_slides(self, ctx: Context, ev: SlideGeneratedEvent) -> StopEvent | SlideValidationEvent:
@@ -292,6 +296,10 @@ class SlideGenWorkflow(Workflow):
         # upload image w. prompt for validation to llm and get structured response
         image_documents = SimpleDirectoryReader(img_dir).load_data()
 
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] "
+                      f"{ctx.data['n_retry']}th try for validating the generated slide deck..."))
+
         llm = mm_gpt4o
         program = MultiModalLLMCompletionProgram.from_defaults(
             output_parser=PydanticOutputParser(SlideValidationResult),
@@ -303,11 +311,18 @@ class SlideGenWorkflow(Workflow):
         response = program()
 
         if response.is_valid:
+            ctx.write_event_to_stream(
+                Event(msg=f"[{inspect.currentframe().f_code.co_name}] The slides are fixed!"))
             return StopEvent("The slides are fixed!")
         else:
             if ctx.data["n_retry"] < self.max_validation_retries:
+                ctx.write_event_to_stream(
+                    Event(msg=f"[{inspect.currentframe().f_code.co_name}] The slides are not fixed, retrying..."))
                 return SlideValidationEvent(result=response)
             else:
+                ctx.write_event_to_stream(
+                    Event(msg=f"[{inspect.currentframe().f_code.co_name}] "
+                              f"The slides are not fixed after {self.max_validation_retries} retries!"))
                 return StopEvent(f"The slides are not fixed after {self.max_validation_retries} retries!")
 
     @step(pass_context=True)
@@ -317,6 +332,9 @@ class SlideGenWorkflow(Workflow):
         # give agent code_interpreter and get_layout tools
         # use feedback as prompt to agent
         # agent make changes to the slides and save slide
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] Modifying the slides based on the feedback..."))
+
         slide_pptx_path = f"/mnt/data/{ctx.data['latest_pptx_file']}"
         remote_files = self.azure_code_interpreter.list_files()
         for f in remote_files:
@@ -335,9 +353,12 @@ class SlideGenWorkflow(Workflow):
                                                modified_pptx_path=modified_pptx_path
                                                ) + REACT_PROMPT_SUFFIX
         agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
-        response = agent.chat(f"Modify the slides based on the feedback")
+        # # response = agent.chat(f"Modify the slides based on the feedback")
+        task = agent.create_task(f"Modify the slides based on the feedback")
+        self.run_react_agent(agent, task, ctx)
+
         self.download_all_files_from_session()
-        return SlideGeneratedEvent(pptx_fpath=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{Path(modified_pptx_path).name}")
+        return SlideGeneratedEvent(pptx_fpath=f"{self.workflow_artifacts_path.as_posix()}/{Path(modified_pptx_path).name}")
 
 
 async def run_workflow(file_dir: str):

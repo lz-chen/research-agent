@@ -21,9 +21,6 @@ async def fetch_streaming_data(url: str, payload: dict = None):
 
 async def get_stream_data(url, payload, expander_placeholder):
     async for line in fetch_streaming_data(url, payload):
-        if line == "END_OF_STREAM":
-            break  # Exit the loop when the stream ends
-
         # if line.startswith("[summary2outline]/json"):
         #     # Extract JSON data from the line
         #     json_data = json.loads(line.split("/json: ")[-1])
@@ -32,9 +29,12 @@ async def get_stream_data(url, payload, expander_placeholder):
         with expander_placeholder:
             # Create a new empty placeholder for each message
             new_message_placeholder = st.empty()
-            new_message_placeholder.write(repr(line))  # Display the new message
+            new_message_placeholder.write(str(line))  # Display the new message
             st.divider()
             st.session_state.received_lines.append(line)
+        if "[Final result]:" in str(line):
+            print("Final result received!!!")
+            break  # Stop processing after receiving the final result
 
 
 @st.dialog("Provide feedback to the slide outline")
@@ -104,6 +104,7 @@ def main():
         asyncio.run(get_stream_data("http://backend:80/run-slide-gen",
                                     {"path": "./data/summaries_test"},
                                     expander_placeholder))
+        print("Workflow finished. Received lines:")
         print(st.session_state.received_lines)
 
 

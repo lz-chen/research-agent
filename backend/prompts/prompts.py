@@ -192,7 +192,7 @@ Requirement:
 SLIDE_VALIDATION_PMT = """
 You are an AI that validates the slide deck generated according to following rules:
 - The slide need to have a front page 
-- The slide need to have a thank you page
+- The slide need to have a final page (e.g. a 'thank you' or 'questions' page)
 - The slide texts are clearly readable, not cut off, not overflowing the textbox
  and not overlapping with other elements
 
