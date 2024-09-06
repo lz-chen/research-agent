@@ -9,7 +9,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/.config/libreoffice && \
-    ln -s /usr/lib/libreoffice/program/soffice /usr/bin/soffice
+    ln -sf /usr/lib/libreoffice/program/soffice /usr/bin/soffice
 
 COPY pyproject.toml /app/
 
