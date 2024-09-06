@@ -31,7 +31,7 @@ async def get_stream_data(url, payload, expander_placeholder):
         with expander_placeholder:
             # Create a new empty placeholder for each message
             new_message_placeholder = st.empty()
-            new_message_placeholder.write(line)  # Display the new message
+            new_message_placeholder.write(repr(line))  # Display the new message
             st.divider()
             st.session_state.received_lines.append(line)
 
