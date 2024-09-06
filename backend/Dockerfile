@@ -4,7 +4,12 @@ WORKDIR /app
 
 # Install unoconv and its dependencies
 RUN apt-get update && \
-    apt-get install -y unoconv libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress python3-uno
+    apt-get install -y unoconv libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress python3-uno && \
+    apt-get install -y libreoffice-common && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /app/.config/libreoffice && \
+    ln -s /usr/lib/libreoffice/program/soffice /usr/bin/soffice
 
 COPY pyproject.toml /app/
 
