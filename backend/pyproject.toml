@@ -36,6 +36,7 @@ pymupdf = "^1.24.9"
 fastapi = "^0.112.2"
 uvicorn = "^0.30.6"
 azure-cli= "^2.64.0"
+llama-index-tools-tavily-research = "^0.2.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -10,7 +11,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import arxiv
 from semanticscholar import SemanticScholar
-from prompts import IS_CITATION_RELEVANT_PMT
+from prompts.prompts import IS_CITATION_RELEVANT_PMT
 
 from services import llms
 import logging
@@ -28,8 +29,8 @@ class Paper(BaseModel):
     entry_id: str
     title: str
     authors: List[str]
-    published: str
     summary: str
+    published: Optional[str] = None
     primary_category: Optional[str] = None
     link: Optional[str] = None
     external_ids: Optional[dict] = None
@@ -42,48 +43,48 @@ class IsCitationRelevant(BaseModel):
     reason: str
 
 
-def search_paper_arxiv(title, limit=1):
-    client = arxiv.Client()
-
-    search = arxiv.Search(
-        query=title,
-        max_results=limit,
-        # sort_by=arxiv.SortCriterion.SubmittedDate
-    )
-
-    results = client.results(search)
-    papers = []
-    for result in results:
-        paper = Paper(
-            entry_id=result.entry_id,
-            title=result.title,
-            authors=[a.name for a in result.authors],
-            published=result.published.strftime("%Y-%m-%d %H:%M:%S"),
-            summary=result.summary,
-            primary_category=result.primary_category,
-            link=result.pdf_url
-        )
-        papers.append(paper)
-    return papers
+# def search_paper_arxiv(title, limit=1):
+#     client = arxiv.Client()
+#
+#     search = arxiv.Search(
+#         query=title,
+#         max_results=limit,
+#         # sort_by=arxiv.SortCriterion.SubmittedDate
+#     )
+#
+#     results = client.results(search)
+#     papers = []
+#     for result in results:
+#         paper = Paper(
+#             entry_id=result.entry_id,
+#             title=result.title,
+#             authors=[a.name for a in result.authors],
+#             published=result.published.strftime("%Y-%m-%d %H:%M:%S"),
+#             summary=result.summary,
+#             primary_category=result.primary_category,
+#             link=result.pdf_url
+#         )
+#         papers.append(paper)
+#     return papers
 
 
 def search_paper_ss(query: str, limit: int = 1):
-    s2 = SemanticScholar()
+    s2 = SemanticScholar(api_key=settings.SEMANTIC_SCHOLAR_API_KEY)
     results = s2.search_paper(query, limit=limit)
     papers = []
     for result in results.raw_data:
-        paper = Paper(
-            entry_id=str(result['corpusId']),
-            title=result['title'],
-            authors=[a["name"] for a in result['authors']],
-            published=result['publicationDate'],
-            summary=result['abstract'],
-            primary_category=result['fieldsOfStudy'][0],
-            link=result['url'],
-            external_ids=result['externalIds'],
-            open_access_pdf=result['openAccessPdf']
-        )
-        papers.append(paper)
+        # paper = Paper(
+        #     entry_id=str(result['corpusId']),
+        #     title=result['title'],
+        #     authors=[a["name"] for a in result['authors']],
+        #     published=result['publicationDate'],
+        #     summary=result['abstract'],
+        #     primary_category=result['fieldsOfStudy'][0],
+        #     link=result['url'],
+        #     external_ids=result['externalIds'],
+        #     open_access_pdf=result['openAccessPdf']
+        # )
+        papers.append(ss_result_to_paper(result))
 
     return papers
 
@@ -95,24 +96,41 @@ def get_citations_ss(paper: Paper):
     for res in results:
         result = res.paper
         try:
-            citation = Paper(
-                entry_id=str(result['corpusId']),
-                title=result['title'],
-                authors=[a["name"] for a in result['authors']],
-                published=result['publicationDate'].strftime("%Y-%m-%d %H:%M:%S") if not isinstance(
-                    result['publicationDate'], str) else result['publicationDate'],
-                summary=result['abstract'],
-                primary_category=result['fieldsOfStudy'][0] if result['fieldsOfStudy'] else None,
-                link=result['url'],
-                external_ids=result['externalIds'],
-                open_access_pdf=result['openAccessPdf']
-            )
-            citations.append(citation)
+            # citation = Paper(
+            #     entry_id=str(result['corpusId']),
+            #     title=result['title'],
+            #     authors=[a["name"] for a in result['authors']],
+            #     published=result['publicationDate'].strftime("%Y-%m-%d %H:%M:%S") if isinstance(
+            #         result['publicationDate'], datetime) else result['publicationDate'],
+            #     summary=result['abstract'],
+            #     primary_category=result['fieldsOfStudy'][0] if result['fieldsOfStudy'] else None,
+            #     link=result['url'],
+            #     external_ids=result['externalIds'],
+            #     open_access_pdf=result['openAccessPdf']
+            # )
+            citations.append(ss_result_to_paper(result))
         except Exception as e:
-            logging.error("Error parsing citation.")
-            logging.error(e)
+            logging.warning(
+                f"Error parsing citation titled {result['title'] if result['title'] else None}, skipping...")
+            logging.warning(e)
             continue
     return citations
+
+
+def ss_result_to_paper(result):
+    paper = Paper(
+        entry_id=str(result['corpusId']),
+        title=result['title'],
+        authors=[a["name"] for a in result['authors']],
+        published=result['publicationDate'].strftime("%Y-%m-%d %H:%M:%S") if isinstance(
+            result['publicationDate'], datetime) else result['publicationDate'],
+        summary=result['abstract'],
+        primary_category=result['fieldsOfStudy'][0] if result['fieldsOfStudy'] else None,
+        link=result['url'],
+        external_ids=result['externalIds'],
+        open_access_pdf=result['openAccessPdf']
+    )
+    return paper
 
 
 def get_paper_with_citations(query: str, limit: int = 1) -> List[Paper]:
@@ -154,7 +172,7 @@ async def filter_relevant_citations(citations: List[Paper]) -> Dict[str, Any]:
     :param research_topic: research topic to filter by
     :return:
     """
-    llm = llms.new_gpt4o(temperature=0.0)
+    llm = llms.new_gpt4o_mini(temperature=0.0)
     tasks = [process_citation(i, citation, llm) for i, citation in enumerate(citations)]
     results = await asyncio.gather(*tasks)
 
@@ -176,13 +194,15 @@ def download_paper_arxiv(paper_id: str, download_dir: str, filename: str):
     logging.info("Done!")
 
 
-def download_relevant_citations(citation_dict: Dict[str, Any]):
+def download_relevant_citations(citation_dict: Dict[str, Any], paper_dir: Path = None):
     """
     Check of the citation is relevant and download the relevant ones use arxiv.
-    :param citation_dict:
+    :param citation_dict: dictionary of citations with relevance scores
+    :param paper_dir: directory to save the papers
     :return:
     """
-    paper_dir = Path(__file__).parent / "data" / "papers"
+    if not paper_dir:
+        paper_dir = Path(__file__).parent / "data" / "papers"
     paper_dir.mkdir(parents=True, exist_ok=True)
     # count how many relevant citations are there
     relevant_citations = len([v["is_relevant"].score for v in citation_dict.values() if v["is_relevant"].score > 0])
@@ -237,8 +257,6 @@ def parse_paper_pdfs(papers_dir: Path, force_reparse=False):
             continue
         logging.info(f"Parsing pdf file '{f}' to markdown")
         parse_pdf(f, force_reparse)
-
-
 
 
 @click.command()

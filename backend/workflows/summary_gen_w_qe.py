@@ -22,7 +22,7 @@ from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core import Settings
 from config import settings
-from prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
+from prompts.prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 from utils.visualization import visualize_nodes_with_attributes

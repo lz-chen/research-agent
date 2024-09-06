@@ -1,8 +1,10 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Any
 
 from llama_index.core.workflow import Event
 from pydantic import BaseModel, Field
+
+from workflows.paper_scraping import Paper, IsCitationRelevant
 
 
 class SlideOutline(BaseModel):
@@ -25,12 +27,37 @@ class SlideValidationResult(BaseModel):
     suggestion_to_fix: str
 
 
+class TavilySearchResult(BaseModel):
+    title: str
+    url: str
+    content: str
+    score: float
+    raw_content: Optional[Any]
+
+
+class TavilyResultsEvent(Event):
+    results: List[TavilySearchResult]
+
+
+class PaperEvent(Event):
+    paper: Paper
+
+
+class FilteredPaperEvent(Event):
+    paper: Paper
+    is_relevant: IsCitationRelevant
+
+
+class FilteredPapersEvent(Event):
+    paper: Paper
+
+
+class DownloadPaperEvent(Event):
+    papers_dict: dict
+
+
 class SummaryEvent(Event):
     summary: str
-
-
-# class GetOutlineFeedbackEvent(Event):
-#     summary: str
 
 
 class OutlineFeedbackEvent(Event):

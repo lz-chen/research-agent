@@ -36,7 +36,7 @@ from services.embeddings import aoai_embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
-from llama_index.core.workflow import Context, Event, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
+from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step, draw_all_possible_flows
 
 from utils.tools import get_all_layouts_info
 import inspect
