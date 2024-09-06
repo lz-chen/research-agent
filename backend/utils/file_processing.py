@@ -36,15 +36,26 @@ def pdf2images(pdf_path: Path, output_folder: Path, dpi: int = 200) -> List[str]
 
 def pptx2pdf(pptx_path: Path, pdf_path: Path):
     # Call LibreOffice in headless mode to convert pptx to pdf
+    # subprocess.run(
+    #     [
+    #         "unoconv",
+    #         "-f",
+    #         "pdf",
+    #         "-e",
+    #         "ExportHiddenSlides=true",
+    #         "-o",
+    #         pdf_path.as_posix(),
+    #         pptx_path.as_posix(),
+    #     ], check=True
+    # )
     subprocess.run(
         [
-            "unoconv",
-            "-f",
+            "soffice",
+            "--headless",
+            "--convert-to",
             "pdf",
-            "-e",
-            "ExportHiddenSlides=true",
-            "-o",
-            pdf_path.as_posix(),
+            "--outdir",
+            pdf_path.parent.as_posix(),
             pptx_path.as_posix(),
         ], check=True
     )

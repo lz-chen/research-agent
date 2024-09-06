@@ -4,6 +4,9 @@ import streamlit as st
 import httpx
 import asyncio
 
+if "received_lines" not in st.session_state:
+    st.session_state.received_lines = []
+
 
 async def fetch_streaming_data(url: str, payload: dict = None):
     async with httpx.AsyncClient(timeout=1200.0) as client:
@@ -29,6 +32,8 @@ async def get_stream_data(url, payload, expander_placeholder):
             # Create a new empty placeholder for each message
             new_message_placeholder = st.empty()
             new_message_placeholder.write(line)  # Display the new message
+            st.divider()
+            st.session_state.received_lines.append(line)
 
 
 @st.dialog("Provide feedback to the slide outline")
@@ -98,6 +103,7 @@ def main():
         asyncio.run(get_stream_data("http://backend:80/run-slide-gen",
                                     {"path": "./data/summaries_test"},
                                     expander_placeholder))
+        print(st.session_state.received_lines)
 
 
 main()

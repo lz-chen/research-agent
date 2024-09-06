@@ -2,14 +2,24 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install unoconv and its dependencies
+# Install unoconv, LibreOffice, and necessary dependencies
 RUN apt-get update && \
-    apt-get install -y unoconv libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress python3-uno && \
-    apt-get install -y libreoffice-common && \
+    apt-get install -y --no-install-recommends \
+        unoconv \
+        libreoffice-core \
+        libreoffice-writer \
+        libreoffice-calc \
+        libreoffice-impress \
+        libreoffice-common \
+        python3-uno \
+        fonts-dejavu \
+        fonts-liberation && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/.config/libreoffice && \
     ln -sf /usr/lib/libreoffice/program/soffice /usr/bin/soffice
+
+ENV PYTHONPATH=/usr/lib/libreoffice/program
 
 COPY pyproject.toml /app/
 

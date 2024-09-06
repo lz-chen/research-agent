@@ -98,12 +98,16 @@ class SlideGenWorkflow(Workflow):
     def download_all_files_from_session(self):
         """Download all files from the Azure session"""
         remote_files = self.azure_code_interpreter.list_files()
+        local_files = []
         for f in remote_files:
             logging.info(f"Downloading remote file: {f.file_full_path}")
+            local_path = f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}"
             self.azure_code_interpreter.download_file_to_local(
                 remote_file_path=f.file_full_path,
-                local_file_path=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{f.filename}",
+                local_file_path=local_path,
             )
+            local_files.append(local_path)
+        return local_files
 
     @staticmethod
     def save_python_code(code: str):
@@ -252,9 +256,29 @@ class SlideGenWorkflow(Workflow):
         )
         logging.info(f"Uploaded file to Azure: {res}")
 
-        response = agent.chat(f"An example of outline item in json is {ev.outline_example.json()},"
-                              f" generate a slide deck")
-        self.download_all_files_from_session()
+        # response = agent.chat(f"An example of outline item in json is {ev.outline_example.json()},"
+        #                       f" generate a slide deck")
+        task = agent.create_task(f"An example of outline item in json is {ev.outline_example.json()},"
+                                 f" generate a slide deck")
+        step_output = agent.run_step(task.task_id)
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Step output: {step_output}"))
+        while not step_output.is_last:
+            step_output = agent.run_step(task.task_id)
+            cur_reasonings = task.extra_state['current_reasoning']
+            for r in cur_reasonings:
+                ctx.write_event_to_stream(
+                    Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Reasoning: {r.get_content()}"))
+            # ctx.write_event_to_stream(
+            #     Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Step output: {step_output}"))
+
+        response = agent.finalize_response(task.task_id)
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Final Response: {response}"))
+
+        local_files = self.download_all_files_from_session()
+        ctx.write_event_to_stream(
+            Event(msg=f"[{inspect.currentframe().f_code.co_name}] Downloaded files to local path: {local_files}"))
         return SlideGeneratedEvent(pptx_fpath=f"{settings.WORKFLOW_ARTIFACTS_PATH}/{self.final_slide_fname}")
 
     @step(pass_context=True)
