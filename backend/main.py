@@ -23,7 +23,7 @@ async def run_workflow_endpoint(file_dir: SlideGenFileDirectory):
             await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
         final_result = await task
         yield f"Final result: {final_result}\n\n"
-        return  # Ensure the generator completes
+        yield "END_OF_STREAM"  # Signal the end of the stream
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

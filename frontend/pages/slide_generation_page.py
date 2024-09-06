@@ -21,7 +21,8 @@ async def fetch_streaming_data(url: str, payload: dict = None):
 
 async def get_stream_data(url, payload, expander_placeholder):
     async for line in fetch_streaming_data(url, payload):
-        # print(f"Displaying line: {line}")  # Debugging print
+        if line == "END_OF_STREAM":
+            break  # Exit the loop when the stream ends
 
         # if line.startswith("[summary2outline]/json"):
         #     # Extract JSON data from the line
