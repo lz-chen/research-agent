@@ -1,37 +1,16 @@
 import asyncio
-import json
 import random
 import string
-from pathlib import Path
 
 import click
-from llama_index.agent.openai import OpenAIAgent
-from llama_index.core import Settings, SimpleDirectoryReader
-from llama_index.core.agent import ReActAgent
-from llama_index.core.output_parsers import PydanticOutputParser
-from llama_index.core.program import (
-    FunctionCallingProgram,
-    MultiModalLLMCompletionProgram,
-)
-from llama_index.core.tools import FunctionTool
-from llama_index.tools.tavily_research import TavilyToolSpec
+from llama_index.core import Settings
 from tavily import TavilyClient
 
 from config import settings
-from prompts.prompts import (
-    SLIDE_GEN_PMT,
-    REACT_PROMPT_SUFFIX,
-    SUMMARY2OUTLINE_PMT,
-    AUGMENT_LAYOUT_PMT,
-    SLIDE_VALIDATION_PMT,
-    SLIDE_MODIFICATION_PMT,
-    MODIFY_SUMMARY2OUTLINE_PMT,
-)
-from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
+from services.llms import llm_gpt4o, new_gpt4o_mini
 from services.embeddings import aoai_embedder
 import logging
 import sys
-from llama_index.core import PromptTemplate
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -41,20 +20,13 @@ from llama_index.core.workflow import (
     draw_all_possible_flows,
 )
 
-from utils.tools import get_all_layouts_info
-import inspect
-from llama_index.tools.azure_code_interpreter import (
-    AzureCodeInterpreterToolSpec,
-)
-
-from utils.file_processing import pptx2images, pdf2images
+from utils.file_processing import  pdf2images
 from workflows.events import *
 from workflows.paper_scraping import (
     get_paper_with_citations,
     process_citation,
     download_relevant_citations,
 )
-from workflows.summary_gen_w_qe import save_paper_sumamry
 from workflows.summary_using_images import (
     get_summary_from_gpt4o,
     save_summary_as_markdown,
@@ -105,7 +77,7 @@ class SummaryGenerationWorkflow(Workflow):
 
     @step(pass_context=True)
     def get_paper_with_citations(
-        self, ctx: Context, ev: TavilyResultsEvent
+            self, ctx: Context, ev: TavilyResultsEvent
     ) -> PaperEvent:
         papers = []
         for r in ev.results:
@@ -125,16 +97,16 @@ class SummaryGenerationWorkflow(Workflow):
 
     @step(pass_context=True)
     def download_papers(
-        self, ctx: Context, ev: FilteredPaperEvent
-    ) -> DownloadPaperEvent:
+            self, ctx: Context, ev: FilteredPaperEvent
+    ) -> Paper2SummaryDispatcherEvent:
         ready = ctx.collect_events(ev, [FilteredPaperEvent] * ctx.data["n_all_papers"])
         if ready is None:
             return None
         papers = sorted(
             ready,
             key=lambda x: (
-                x.is_relevant.score,
-                "arxiv" in (x.paper.external_ids or {}),
+                x.is_relevant.score,  # prioritize papers with higer score
+                "ArXiv" in (x.paper.external_ids or {}),  # prioritize papers can be found on ArXiv
             ),
             reverse=True,
         )[: self.n_max_final_papers]
@@ -142,32 +114,51 @@ class SummaryGenerationWorkflow(Workflow):
             i: {"citation": p.paper, "is_relevant": p.is_relevant}
             for i, p in enumerate(papers)
         }
-        return DownloadPaperEvent(papers_dict=papers_dict)
+        download_relevant_citations(papers_dict, Path(self.papers_download_path))
+        return Paper2SummaryDispatcherEvent(papers_path=self.papers_download_path.as_posix())
 
-    @step()
-    def download_paper(self, ev: DownloadPaperEvent) -> Paper2SummaryEvent:
-        download_relevant_citations(ev.papers_dict, Path(self.papers_download_path))
-        return Paper2SummaryEvent(papers_path=self.papers_download_path.as_posix())
+        # return DownloadPaperEvent(papers_dict=papers_dict)
+
+    # @step()
+    # def download_paper(self, ev: DownloadPaperEvent) -> Paper2SummaryDispatcherEvent:
+    #     download_relevant_citations(ev.papers_dict, Path(self.papers_download_path))
+    #     return Paper2SummaryDispatcherEvent(papers_path=self.papers_download_path.as_posix())
 
     @step(pass_context=True)
-    def paper2summary(self, ctx: Context, ev: Paper2SummaryEvent) -> SummaryStoredEvent:
+    def paper2summary_dispatcher(self, ctx: Context, ev: Paper2SummaryDispatcherEvent) -> Paper2SummaryEvent:
         ctx.data["n_pdfs"] = 0
         for pdf_name in Path(ev.papers_path).glob("*.pdf"):
-            output_dir = self.papers_images_path / pdf_name.stem
-            output_dir.mkdir(exist_ok=True, parents=True)
-            image_paths = pdf2images(pdf_name, output_dir)
-            print(image_paths)
-            summary_txt = get_summary_from_gpt4o(output_dir)
+            img_output_dir = self.papers_images_path / pdf_name.stem
+            img_output_dir.mkdir(exist_ok=True, parents=True)
+            # image_paths = pdf2images(pdf_name, output_dir)
+            # print(image_paths)
+
+            # summary_txt = get_summary_from_gpt4o(output_dir)
             summary_fpath = self.paper_summary_path / f"{pdf_name.stem}.md"
-            save_summary_as_markdown(summary_txt, summary_fpath)
+
+            # save_summary_as_markdown(summary_txt, summary_fpath)
+
             ctx.data["n_pdfs"] += 1
-            self.send_event(SummaryStoredEvent(summary_fpath=summary_fpath.as_posix()))
+            self.send_event(Paper2SummaryEvent(pdf_path=pdf_name,
+                                               image_output_dir=img_output_dir,
+                                               summary_path=summary_fpath))
+            # self.send_event(SummaryStoredEvent(fapth=summary_fpath.as_posix()))
+
+    @step()
+    async def paper2summary(self, ev: Paper2SummaryEvent) -> SummaryStoredEvent:
+        pdf2images(ev.pdf_path, ev.image_output_dir)
+        summary_txt = get_summary_from_gpt4o(ev.image_output_dir)
+        save_summary_as_markdown(summary_txt, ev.summary_path)
+        return SummaryStoredEvent(fapth=ev.summary_path)
 
     @step(pass_context=True)
-    def get_paper_summaries(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
+    def finish(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
         ready = ctx.collect_events(ev, [SummaryStoredEvent] * ctx.data["n_pdfs"])
         if ready is None:
             return None
+        for e in ready:
+            assert e.fpath.is_file()
+        logging.info(f"All summary are stored!")
         return StopEvent()
 
 

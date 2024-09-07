@@ -60,16 +60,22 @@ class FilteredPapersEvent(Event):
     paper: Paper
 
 
-class DownloadPaperEvent(Event):
-    papers_dict: dict
+# class DownloadPaperEvent(Event):
+#     papers_dict: dict
 
 
-class Paper2SummaryEvent(Event):
+class Paper2SummaryDispatcherEvent(Event):
     papers_path: str
 
 
+class Paper2SummaryEvent(Event):
+    pdf_path: Path
+    image_output_dir: Path
+    summary_path: Path
+
+
 class SummaryStoredEvent(Event):
-    fapth: str
+    fapth: Path
 
 
 class SummaryEvent(Event):
