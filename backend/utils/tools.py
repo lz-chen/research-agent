@@ -65,43 +65,50 @@ def get_all_layouts_info(presentation_file):
         layout_info = {}
 
         # Get the name of the layout
-        layout_info['layout_name'] = layout.name
+        layout_info["layout_name"] = layout.name
 
         # Get information about placeholders
         placeholders_info = []
         for placeholder in layout.placeholders:
             text_frame = placeholder.text_frame
             font_size = None
-            if text_frame and text_frame.paragraphs and text_frame.paragraphs[0].font.size:
-                font_size = text_frame.paragraphs[0].font.size.pt  # Convert to points (pt)
+            if (
+                text_frame
+                and text_frame.paragraphs
+                and text_frame.paragraphs[0].font.size
+            ):
+                font_size = text_frame.paragraphs[
+                    0
+                ].font.size.pt  # Convert to points (pt)
             auto_size = text_frame.auto_size.name if text_frame.auto_size else None
             placeholder_info = {
-                'index': placeholder.placeholder_format.idx,
-                'name': placeholder.name,
-                'shape_type': placeholder.shape_type,
-                'left': Inches(placeholder.left.inches),
-                'top': Inches(placeholder.top.inches),
-                'width': Inches(placeholder.width.inches),
-                'height': Inches(placeholder.height.inches),
-                'font_size': font_size,
-                'auto_size': auto_size
+                "index": placeholder.placeholder_format.idx,
+                "name": placeholder.name,
+                "shape_type": placeholder.shape_type,
+                "left": Inches(placeholder.left.inches),
+                "top": Inches(placeholder.top.inches),
+                "width": Inches(placeholder.width.inches),
+                "height": Inches(placeholder.height.inches),
+                "font_size": font_size,
+                "auto_size": auto_size,
             }
             placeholders_info.append(placeholder_info)
-        layout_info['placeholders'] = placeholders_info
+        layout_info["placeholders"] = placeholders_info
 
         # Get the number of shapes in the layout
-        layout_info['number_of_shapes'] = len(layout.shapes)
+        layout_info["number_of_shapes"] = len(layout.shapes)
 
         # Check if the layout has a background
-        layout_info['has_background'] = layout.background is not None
+        layout_info["has_background"] = layout.background is not None
 
         # Get the name of the slide master
-        layout_info['slide_master_name'] = layout.slide_master.name
+        layout_info["slide_master_name"] = layout.slide_master.name
 
         # Add the layout information to the list
         layouts_info.append(layout_info)
 
     return layouts_info
+
 
 # info = get_all_layouts_info('/Users/lzchen/PycharmProjects/research_agent/data/Inmeta Brand guidelines 2023.pptx')
 # from pprint import pprint

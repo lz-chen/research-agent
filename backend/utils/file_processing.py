@@ -57,12 +57,15 @@ def pptx2pdf(pptx_path: Path, pdf_path: Path):
             "--outdir",
             pdf_path.parent.as_posix(),
             pptx_path.as_posix(),
-        ], check=True
+        ],
+        check=True,
     )
     # return pdf_path
 
 
-def pptx2images(pptx_path: Path, output_folder: Optional[Path] = None, dpi: int = 200) -> str:
+def pptx2images(
+    pptx_path: Path, output_folder: Optional[Path] = None, dpi: int = 200
+) -> str:
     """
     Convert each slide of a PPTX to an image and save them to the output folder.
     :param pptx_path: file path to the PPTX file
@@ -72,7 +75,9 @@ def pptx2images(pptx_path: Path, output_folder: Optional[Path] = None, dpi: int 
     """
     pdf_path = pptx_path.parent.joinpath(f"{pptx_path.stem}.pdf")
     pptx2pdf(pptx_path, pdf_path)
-    img_output_folder = output_folder or pptx_path.parent.joinpath(f"{pptx_path.stem}_images")
+    img_output_folder = output_folder or pptx_path.parent.joinpath(
+        f"{pptx_path.stem}_images"
+    )
     img_output_folder.mkdir(exist_ok=True, parents=True)
     pdf2images(Path(pdf_path), img_output_folder, dpi)
     return img_output_folder.as_posix()
@@ -88,7 +93,7 @@ def pptx2images(pptx_path: Path, output_folder: Optional[Path] = None, dpi: int 
     # )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # for pdf_name in Path("data/papers").glob("*.pdf"):
     #     paper_img_dir = Path("data/papers_image")
     #     # paper_img_dir.mkdir(exist_ok=True, parents=True)

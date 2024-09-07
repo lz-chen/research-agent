@@ -120,22 +120,29 @@ summary2outline_requriements = """
 - A paragraph of text in the slide should be less than 25 words.
 """
 
-SUMMARY2OUTLINE_PMT = """
+SUMMARY2OUTLINE_PMT = (
+    """
 You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
 You will receive a markdown string that contains the summary of papers and 
 you will generate a slide outlines for each paper.
-Requirements:""" + summary2outline_requriements + """
+Requirements:"""
+    + summary2outline_requriements
+    + """
 
 Here is the markdown content: {summary} 
 """
+)
 
-MODIFY_SUMMARY2OUTLINE_PMT = """
+MODIFY_SUMMARY2OUTLINE_PMT = (
+    """
 You are an AI that modifies the slide outlines generated according to given user feedback.
 The original summary is '''{summary_txt}'''.
 Previously generated outline is '''{outline_txt}'''.
 The feedback provided is: '''{feedback}'''.
 Please modify the outline based on the feedback and provide the updated outline, respecting
- the original requirements:""" + summary2outline_requriements
+ the original requirements:"""
+    + summary2outline_requriements
+)
 
 AUGMENT_LAYOUT_PMT = """
 You are an AI that selects slide layout from a template for the slide text given.
@@ -159,9 +166,9 @@ Here is the slide content:
 # - if the slide text is list of topics or agenda, select one of the 'Agenda' layout
 # - if the slide text contains text and some paragraph, select one of the 'Content' layout
 # - if the slide text is very short, depending on the text, select either 'Frontpage' or 'Thank you' layout
-#- Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
+# - Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
 # by the order they appear in the list of placeholders)
-#- Use appropriate color and style from the template to make the slide visually appealing
+# - Use appropriate color and style from the template to make the slide visually appealing
 
 SLIDE_GEN_PMT = """
 You are an AI that generate slide deck from a given slide outlines and uses the
@@ -185,8 +192,8 @@ Requirement:
 - Save the final slide pptx file with name `{final_slide_fname}`
 
 """
-#- For each key heading in the paper summary, create a different text box in the slide
-#- For different level of heading in the summary markdown, create paragraph with
+# - For each key heading in the paper summary, create a different text box in the slide
+# - For different level of heading in the summary markdown, create paragraph with
 #  appropriate font size in the text box
 
 SLIDE_VALIDATION_PMT = """

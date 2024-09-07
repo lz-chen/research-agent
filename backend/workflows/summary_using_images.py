@@ -5,14 +5,14 @@ import logging
 from llama_index.core import SimpleDirectoryReader
 
 from prompts.prompts import SUMMARIZE_PAPER_PMT
-from services.llms import new_mm_gpt4o
+from services.llms import new_mm_gpt4o, new_gpt4o
 import sys
 from llama_index.core import Settings
 from utils.tokens import calculate_cost
 import tiktoken
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 
-Settings.llm = new_mm_gpt4o()
+Settings.llm = new_gpt4o()
 
 token_counter = TokenCountingHandler(
     tokenizer=tiktoken.encoding_for_model(Settings.llm.model).encode,
@@ -30,10 +30,10 @@ logging.basicConfig(
 
 
 def get_summary_from_gpt4o(img_dir):
-    # llm = mm_gpt4o
+    llm = new_mm_gpt4o()
     image_documents = SimpleDirectoryReader(img_dir).load_data()
 
-    response = Settings.llm.complete(
+    response = llm.complete(
         prompt=SUMMARIZE_PAPER_PMT,
         image_documents=image_documents,
     )
@@ -69,10 +69,20 @@ def track_cost() -> None:
 
 
 @click.command()
-@click.option("--folder_path", "-f", required=False,
-              default="data/papers_image", help="Path to the folder containing images")
-@click.option("--output_dir", "-o", required=False,
-              default="data/summaries_from_img_openai", help="Output markdown file for the summary")
+@click.option(
+    "--folder_path",
+    "-f",
+    required=False,
+    default="data/papers_image",
+    help="Path to the folder containing images",
+)
+@click.option(
+    "--output_dir",
+    "-o",
+    required=False,
+    default="data/summaries_from_img_openai",
+    help="Output markdown file for the summary",
+)
 def main(folder_path, output_dir):
     # get all subdirs
     for subdir in Path(folder_path).iterdir():

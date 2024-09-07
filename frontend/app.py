@@ -13,7 +13,9 @@ def main_page():
     # st.logo("logo.png")
 
     main_page = st.Page("pages/main_page.py", title="🏠 Home")
-    slide_gen_page = st.Page("pages/slide_generation_page.py", title="🧾 Slide Generation")
+    slide_gen_page = st.Page(
+        "pages/slide_generation_page.py", title="🧾 Slide Generation"
+    )
     # chat_page = st.Page("app_pages/chat.py", title="💬 Chat")
     pg = st.navigation([main_page, slide_gen_page])
 

@@ -9,17 +9,25 @@ from workflows.paper_scraping import Paper, IsCitationRelevant
 
 class SlideOutline(BaseModel):
     """Slide outline for one page"""
+
     title: str = Field(..., description="Title of the slide")
     content: str = Field(..., description="Main text content of the slide")
 
 
 class SlideOutlineWithLayout(BaseModel):
     """Slide outline with layout information for one page"""
+
     title: str = Field(..., description="Title of the slide")
     content: str = Field(..., description="Main text content of the slide")
-    layout_name: str = Field(..., description="Name of the page layout to be used for the slide")
-    idx_title_placeholder: str = Field(..., description="Index of the title placeholder in the page layout")
-    idx_content_placeholder: str = Field(..., description="Index of the content placeholder in the page layout")
+    layout_name: str = Field(
+        ..., description="Name of the page layout to be used for the slide"
+    )
+    idx_title_placeholder: str = Field(
+        ..., description="Index of the title placeholder in the page layout"
+    )
+    idx_content_placeholder: str = Field(
+        ..., description="Index of the content placeholder in the page layout"
+    )
 
 
 class SlideValidationResult(BaseModel):
@@ -54,6 +62,14 @@ class FilteredPapersEvent(Event):
 
 class DownloadPaperEvent(Event):
     papers_dict: dict
+
+
+class Paper2SummaryEvent(Event):
+    papers_path: str
+
+
+class SummaryStoredEvent(Event):
+    fapth: str
 
 
 class SummaryEvent(Event):
