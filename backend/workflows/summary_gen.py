@@ -20,7 +20,7 @@ from llama_index.core.workflow import (
     draw_all_possible_flows,
 )
 
-from utils.file_processing import  pdf2images
+from utils.file_processing import pdf2images
 from workflows.events import *
 from workflows.paper_scraping import (
     get_paper_with_citations,
@@ -77,7 +77,7 @@ class SummaryGenerationWorkflow(Workflow):
 
     @step(pass_context=True)
     def get_paper_with_citations(
-            self, ctx: Context, ev: TavilyResultsEvent
+        self, ctx: Context, ev: TavilyResultsEvent
     ) -> PaperEvent:
         papers = []
         for r in ev.results:
@@ -97,7 +97,7 @@ class SummaryGenerationWorkflow(Workflow):
 
     @step(pass_context=True)
     def download_papers(
-            self, ctx: Context, ev: FilteredPaperEvent
+        self, ctx: Context, ev: FilteredPaperEvent
     ) -> Paper2SummaryDispatcherEvent:
         ready = ctx.collect_events(ev, [FilteredPaperEvent] * ctx.data["n_all_papers"])
         if ready is None:
@@ -106,7 +106,10 @@ class SummaryGenerationWorkflow(Workflow):
             ready,
             key=lambda x: (
                 x.is_relevant.score,  # prioritize papers with higer score
-                "ArXiv" in (x.paper.external_ids or {}),  # prioritize papers can be found on ArXiv
+                "ArXiv"
+                in (
+                    x.paper.external_ids or {}
+                ),  # prioritize papers can be found on ArXiv
             ),
             reverse=True,
         )[: self.n_max_final_papers]
@@ -115,34 +118,27 @@ class SummaryGenerationWorkflow(Workflow):
             for i, p in enumerate(papers)
         }
         download_relevant_citations(papers_dict, Path(self.papers_download_path))
-        return Paper2SummaryDispatcherEvent(papers_path=self.papers_download_path.as_posix())
-
-        # return DownloadPaperEvent(papers_dict=papers_dict)
-
-    # @step()
-    # def download_paper(self, ev: DownloadPaperEvent) -> Paper2SummaryDispatcherEvent:
-    #     download_relevant_citations(ev.papers_dict, Path(self.papers_download_path))
-    #     return Paper2SummaryDispatcherEvent(papers_path=self.papers_download_path.as_posix())
+        return Paper2SummaryDispatcherEvent(
+            papers_path=self.papers_download_path.as_posix()
+        )
 
     @step(pass_context=True)
-    def paper2summary_dispatcher(self, ctx: Context, ev: Paper2SummaryDispatcherEvent) -> Paper2SummaryEvent:
+    def paper2summary_dispatcher(
+        self, ctx: Context, ev: Paper2SummaryDispatcherEvent
+    ) -> Paper2SummaryEvent:
         ctx.data["n_pdfs"] = 0
         for pdf_name in Path(ev.papers_path).glob("*.pdf"):
             img_output_dir = self.papers_images_path / pdf_name.stem
             img_output_dir.mkdir(exist_ok=True, parents=True)
-            # image_paths = pdf2images(pdf_name, output_dir)
-            # print(image_paths)
-
-            # summary_txt = get_summary_from_gpt4o(output_dir)
             summary_fpath = self.paper_summary_path / f"{pdf_name.stem}.md"
-
-            # save_summary_as_markdown(summary_txt, summary_fpath)
-
             ctx.data["n_pdfs"] += 1
-            self.send_event(Paper2SummaryEvent(pdf_path=pdf_name,
-                                               image_output_dir=img_output_dir,
-                                               summary_path=summary_fpath))
-            # self.send_event(SummaryStoredEvent(fapth=summary_fpath.as_posix()))
+            self.send_event(
+                Paper2SummaryEvent(
+                    pdf_path=pdf_name,
+                    image_output_dir=img_output_dir,
+                    summary_path=summary_fpath,
+                )
+            )
 
     @step()
     async def paper2summary(self, ev: Paper2SummaryEvent) -> SummaryStoredEvent:
