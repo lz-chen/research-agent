@@ -29,11 +29,11 @@ logging.basicConfig(
 )
 
 
-def get_summary_from_gpt4o(img_dir):
+async def get_summary_from_gpt4o(img_dir):
     llm = new_mm_gpt4o()
     image_documents = SimpleDirectoryReader(img_dir).load_data()
 
-    response = llm.complete(
+    response = await llm.acomplete(
         prompt=SUMMARIZE_PAPER_PMT,
         image_documents=image_documents,
     )

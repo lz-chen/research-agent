@@ -67,7 +67,7 @@ class SummaryGenerationWorkflow(Workflow):
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
 
     @step
-    def tavily_query(self, ev: StartEvent) -> TavilyResultsEvent:
+    async def tavily_query(self, ev: StartEvent) -> TavilyResultsEvent:
         query = f"arxiv papers about the state of the art of {ev.user_query}"
         # query = f"Help me find the papers on arxiv on the topic of recent advance on {ev.user_query}"
         tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
@@ -76,7 +76,7 @@ class SummaryGenerationWorkflow(Workflow):
         return TavilyResultsEvent(results=results)
 
     @step(pass_context=True)
-    def get_paper_with_citations(
+    async def get_paper_with_citations(
         self, ctx: Context, ev: TavilyResultsEvent
     ) -> PaperEvent:
         papers = []
@@ -89,14 +89,14 @@ class SummaryGenerationWorkflow(Workflow):
         for paper in papers:
             self.send_event(PaperEvent(paper=paper))
 
-    @step()
+    @step(num_workers=4)
     async def filter_papers(self, ev: PaperEvent) -> FilteredPaperEvent:
         llm = new_gpt4o_mini(temperature=0.0)
         _, response = await process_citation(0, ev.paper, llm)
         return FilteredPaperEvent(paper=ev.paper, is_relevant=response)
 
     @step(pass_context=True)
-    def download_papers(
+    async def download_papers(
         self, ctx: Context, ev: FilteredPaperEvent
     ) -> Paper2SummaryDispatcherEvent:
         ready = ctx.collect_events(ev, [FilteredPaperEvent] * ctx.data["n_all_papers"])
@@ -123,7 +123,7 @@ class SummaryGenerationWorkflow(Workflow):
         )
 
     @step(pass_context=True)
-    def paper2summary_dispatcher(
+    async def paper2summary_dispatcher(
         self, ctx: Context, ev: Paper2SummaryDispatcherEvent
     ) -> Paper2SummaryEvent:
         ctx.data["n_pdfs"] = 0
@@ -140,22 +140,22 @@ class SummaryGenerationWorkflow(Workflow):
                 )
             )
 
-    @step()
+    @step(num_workers=4)
     async def paper2summary(self, ev: Paper2SummaryEvent) -> SummaryStoredEvent:
         pdf2images(ev.pdf_path, ev.image_output_dir)
-        summary_txt = get_summary_from_gpt4o(ev.image_output_dir)
+        summary_txt = await get_summary_from_gpt4o(ev.image_output_dir)
         save_summary_as_markdown(summary_txt, ev.summary_path)
-        return SummaryStoredEvent(fapth=ev.summary_path)
+        return SummaryStoredEvent(fpath=ev.summary_path)
 
     @step(pass_context=True)
-    def finish(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
+    async def finish(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
         ready = ctx.collect_events(ev, [SummaryStoredEvent] * ctx.data["n_pdfs"])
         if ready is None:
             return None
         for e in ready:
             assert e.fpath.is_file()
         logging.info(f"All summary are stored!")
-        return StopEvent()
+        return StopEvent(result=e.fpath.parent.as_posix())
 
 
 async def run_workflow(user_query: str):

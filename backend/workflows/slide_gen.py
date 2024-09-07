@@ -95,9 +95,10 @@ class SlideGenWorkflow(Workflow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
+        class_name = self.__class__.__name__
         s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
-        self.workflow_artifacts_path = Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath(
-            s
+        self.workflow_artifacts_path = (
+            Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath(class_name).joinpath(s)
         )
         self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
@@ -391,7 +392,9 @@ class SlideGenWorkflow(Workflow):
                     msg=f"[{inspect.currentframe().f_code.co_name}] The slides are fixed!"
                 )
             )
-            return StopEvent("The slides are fixed!")
+            return StopEvent(
+                self.workflow_artifacts_path.joinpath(self.final_slide_fname)
+            )
         else:
             if ctx.data["n_retry"] < self.max_validation_retries:
                 ctx.write_event_to_stream(

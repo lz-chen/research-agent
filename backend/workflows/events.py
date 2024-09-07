@@ -75,7 +75,11 @@ class Paper2SummaryEvent(Event):
 
 
 class SummaryStoredEvent(Event):
-    fapth: Path
+    fpath: Path
+
+
+class SummaryWfReadyEvent(Event):
+    summary_dir: str
 
 
 class SummaryEvent(Event):
