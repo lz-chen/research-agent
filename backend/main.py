@@ -3,7 +3,7 @@ import asyncio
 from fastapi.responses import StreamingResponse
 
 from models import SlideGenFileDirectory
-from workflows.slide_gen import SlideGenWorkflow
+from workflows.slide_gen import SlideGenerationWorkflow
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -13,7 +13,7 @@ app = FastAPI()
 
 @app.post("/run-slide-gen")
 async def run_workflow_endpoint(file_dir: SlideGenFileDirectory):
-    wf = SlideGenWorkflow(timeout=1200, verbose=True)
+    wf = SlideGenerationWorkflow(timeout=1200, verbose=True)
 
     async def event_generator():
         task = asyncio.create_task(wf.run(file_dir=file_dir.path))

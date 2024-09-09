@@ -18,7 +18,7 @@ from llama_index.core.workflow import (
 
 from workflows.events import *
 
-from workflows.slide_gen import SlideGenWorkflow
+from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
 
 
@@ -44,7 +44,7 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
 
     @step
     async def slide_gen(
-        self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenWorkflow
+        self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenerationWorkflow
     ) -> StopEvent:
         res = await slide_gen_wf.run(file_dir=ev.summary_dir)
         return StopEvent()
@@ -55,7 +55,7 @@ async def run_workflow(user_query: str):
     wf.add_workflows(
         summary_gen_wf=SummaryGenerationWorkflow(timeout=800, verbose=True)
     )
-    wf.add_workflows(slide_gen_wf=SlideGenWorkflow(timeout=1200, verbose=True))
+    wf.add_workflows(slide_gen_wf=SlideGenerationWorkflow(timeout=1200, verbose=True))
     result = await wf.run(
         user_query=user_query,
     )

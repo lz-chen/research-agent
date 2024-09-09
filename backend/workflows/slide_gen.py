@@ -2,26 +2,9 @@ import asyncio
 import json
 import random
 import string
-from pathlib import Path
 
 import click
 
-# import qdrant_client
-# from llama_index.core.agent import ReActAgent, ReActChatFormatter, FunctionCallingAgentWorker
-# from llama_index.core.ingestion import IngestionPipeline
-# from llama_index.core.llms import LLM
-# from llama_index.core.node_parser import MarkdownElementNodeParser
-# from llama_index.core.node_parser import (
-#     UnstructuredElementNodeParser,
-# )
-# from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
-# from llama_index.core.workflow import Workflow, step
-# from llama_index.readers.file import FlatReader, PDFReader
-# from llama_index.storage.docstore.redis import RedisDocumentStore
-# from llama_index.storage.index_store.redis import RedisIndexStore
-# from llama_index.vector_stores.qdrant import QdrantVectorStore
-# from llama_parse import LlamaParse
-# from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.core.agent import ReActAgent
 from llama_index.core.output_parsers import PydanticOutputParser
@@ -63,7 +46,7 @@ from llama_index.tools.azure_code_interpreter import (
 
 from utils.file_processing import pptx2images
 from workflows.events import *
-
+import mlflow
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -86,8 +69,8 @@ def read_summary_content(file_path: Path):
         return file.read()
 
 
-class SlideGenWorkflow(Workflow):
-    max_validation_retries: int = 10
+class SlideGenerationWorkflow(Workflow):
+    max_validation_retries: int = 5
     slide_template_path: str = "./data/Inmeta 2023 template.pptx"
     final_slide_fname: str = "paper_summaries.pptx"
     slide_outlines_fname: str = "slide_outlines.json"
@@ -184,9 +167,9 @@ class SlideGenWorkflow(Workflow):
             )
             self.send_event(SummaryEvent(summary=s))
 
-    @step(pass_context=True)
+    @step(pass_context=True, num_workers=4)
     async def summary2outline(
-        self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
+            self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
     ) -> OutlineEvent:
         """Convert the summary content of one paper to slide outline of one page, mainly
         condense and shorten the elaborated summary content to short sentences or bullet points.
@@ -236,7 +219,7 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def gather_feedback_outline(
-        self, ctx: Context, ev: OutlineEvent
+            self, ctx: Context, ev: OutlineEvent
     ) -> OutlineFeedbackEvent | OutlineOkEvent:
         """Present user the original paper summary and the outlines generated, gather feedback from user"""
         # ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
@@ -263,7 +246,7 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def outlines_with_layout(
-        self, ctx: Context, ev: OutlineOkEvent
+            self, ctx: Context, ev: OutlineOkEvent
     ) -> OutlinesWithLayoutEvent:
         """Given a list of slide page outlines, augment each outline with layout information.
         The layout information includes the layout name, the index of the title placeholder,
@@ -307,7 +290,7 @@ class SlideGenWorkflow(Workflow):
         ctx.write_event_to_stream(
             Event(
                 msg=f"[{inspect.currentframe().f_code.co_name}] {len(slides_w_layout)} outlines with layout are ready!"
-                f" Stored in {slide_outlines_json}"
+                    f" Stored in {slide_outlines_json}"
             )
         )
 
@@ -317,7 +300,7 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def slide_gen(
-        self, ctx: Context, ev: OutlinesWithLayoutEvent
+            self, ctx: Context, ev: OutlinesWithLayoutEvent
     ) -> SlideGeneratedEvent:
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
@@ -327,12 +310,12 @@ class SlideGenWorkflow(Workflow):
         )
 
         prompt = (
-            SLIDE_GEN_PMT.format(
-                json_file_path=ev.outlines_fpath.as_posix(),
-                template_fpath=self.slide_template_path,
-                final_slide_fname=self.final_slide_fname,
-            )
-            + REACT_PROMPT_SUFFIX
+                SLIDE_GEN_PMT.format(
+                    json_file_path=ev.outlines_fpath.as_posix(),
+                    template_fpath=self.slide_template_path,
+                    final_slide_fname=self.final_slide_fname,
+                )
+                + REACT_PROMPT_SUFFIX
         )
         agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
 
@@ -358,11 +341,15 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def validate_slides(
-        self, ctx: Context, ev: SlideGeneratedEvent
+            self, ctx: Context, ev: SlideGeneratedEvent
     ) -> StopEvent | SlideValidationEvent:
         """Validate the generated slide deck"""
         ctx.data["n_retry"] += 1
         ctx.data["latest_pptx_file"] = Path(ev.pptx_fpath).name
+        logging.info(f"[validate_slides] the retry count is: {ctx.data['n_retry']}")
+        logging.info(
+            f"[validate_slides] Validating the generated slide deck"
+            f" {Path(ev.pptx_fpath).name} | {ctx.data['latest_pptx_file']}...")
         # slide to images
         img_dir = pptx2images(Path(ev.pptx_fpath))
 
@@ -372,7 +359,7 @@ class SlideGenWorkflow(Workflow):
         ctx.write_event_to_stream(
             Event(
                 msg=f"[{inspect.currentframe().f_code.co_name}] "
-                f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
+                    f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
             )
         )
 
@@ -407,7 +394,7 @@ class SlideGenWorkflow(Workflow):
                 ctx.write_event_to_stream(
                     Event(
                         msg=f"[{inspect.currentframe().f_code.co_name}] "
-                        f"The slides are not fixed after {self.max_validation_retries} retries!"
+                            f"The slides are not fixed after {self.max_validation_retries} retries!"
                     )
                 )
                 return StopEvent(
@@ -416,7 +403,7 @@ class SlideGenWorkflow(Workflow):
 
     @step(pass_context=True)
     async def modify_slides(
-        self, ctx: Context, ev: SlideValidationEvent
+            self, ctx: Context, ev: SlideValidationEvent
     ) -> SlideGeneratedEvent:
         """Modify the slides based on the validation feedback"""
 
@@ -430,11 +417,13 @@ class SlideGenWorkflow(Workflow):
         )
 
         slide_pptx_path = f"/mnt/data/{ctx.data['latest_pptx_file']}"
+        logging.info(f"[modify_slides] slide_pptx_path: {slide_pptx_path}")
         remote_files = self.azure_code_interpreter.list_files()
         for f in remote_files:
             if f.filename == self.final_slide_fname:
                 slide_pptx_path = f.file_full_path
         modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{ctx.data['n_retry']}.pptx"
+        logging.info(f"[modify_slides] modified_pptx_path: {modified_pptx_path}")
 
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
@@ -442,17 +431,14 @@ class SlideGenWorkflow(Workflow):
             verbose=True,
             max_iterations=50,
         )
-        prompt = (
-            SLIDE_MODIFICATION_PMT.format(
-                pptx_path=slide_pptx_path,
-                feedback=ev.result.suggestion_to_fix,
-                modified_pptx_path=modified_pptx_path,
-            )
-            + REACT_PROMPT_SUFFIX
-        )
+        prompt = SLIDE_MODIFICATION_PMT + REACT_PROMPT_SUFFIX
+
         agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
         # # response = agent.chat(f"Modify the slides based on the feedback")
-        task = agent.create_task(f"Modify the slides based on the feedback")
+        task = agent.create_task(f"The latest version of the slide deck can be found here: "
+                                 f"`/mnt/data/{ctx.data['latest_pptx_file']}`.\n"
+                                 f"The feedback provided is as follows: '{ev.result.suggestion_to_fix}'\n"
+                                 f"Save the modified slide deck as `{modified_pptx_path}`.")
         self.run_react_agent(agent, task, ctx)
 
         self.download_all_files_from_session()
@@ -462,7 +448,7 @@ class SlideGenWorkflow(Workflow):
 
 
 async def run_workflow(file_dir: str):
-    wf = SlideGenWorkflow(timeout=1200, verbose=True)
+    wf = SlideGenerationWorkflow(timeout=1200, verbose=True)
     result = await wf.run(
         file_dir=file_dir,
     )
@@ -478,9 +464,16 @@ async def run_workflow(file_dir: str):
     default="./data/summaries_test",
 )
 def main(file_dir: str):
+    draw_all_possible_flows(SlideGenerationWorkflow, filename="slide_gen_flows.html")
+    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+    mlflow.set_experiment("research-agent-slide-gen-wf")
+    mlflow.llama_index.autolog()
+    mlflow.start_run()
+
     asyncio.run(run_workflow(file_dir))
+
+    mlflow.end_run()
 
 
 if __name__ == "__main__":
-    draw_all_possible_flows(SlideGenWorkflow, filename="slide_gen_flows.html")
     main()

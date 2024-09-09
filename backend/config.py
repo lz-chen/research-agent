@@ -30,6 +30,8 @@ class Settings(BaseSettings):
 
     WORKFLOW_ARTIFACTS_PATH: str
 
+    MLFLOW_TRACKING_URI: str
+
     class Config:
         env_file = ".env"  # relative to execution path
 
