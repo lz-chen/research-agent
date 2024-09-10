@@ -168,7 +168,6 @@ outputs/*
 /.env
 /data/
 
-**.html
 /code_interpreter/
 
 

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     SERP_API_KEY: str
     SEMANTIC_SCHOLAR_API_KEY: str
+    TAVILY_API_KEY: str
 
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_KEY: str
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     REDIS_PORT: int
 
     WORKFLOW_ARTIFACTS_PATH: str
+
+    MLFLOW_TRACKING_URI: str
 
     class Config:
         env_file = ".env"  # relative to execution path

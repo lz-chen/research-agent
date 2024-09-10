@@ -55,11 +55,13 @@ def main():
 
     # Sidebar with form
     with st.sidebar:
-        with st.form(key='slide_gen_form'):
-            file_dir = st.text_input("Enter the directory path for slide generation:",
-                                     value="./data/summaries_test",
-                                     placeholder="./data/summaries_test")
-            submit_button = st.form_submit_button(label='Submit')
+        with st.form(key="slide_gen_form"):
+            file_dir = st.text_input(
+                "Enter the directory path for slide generation:",
+                value="./data/summaries_test",
+                placeholder="./data/summaries_test",
+            )
+            submit_button = st.form_submit_button(label="Submit")
 
     # Main view divided into two columns
     left_column, right_column = st.columns(2)
@@ -101,9 +103,13 @@ def main():
         st.write("Artifacts generated:")
 
     if submit_button:
-        asyncio.run(get_stream_data("http://backend:80/run-slide-gen",
-                                    {"path": "./data/summaries_test"},
-                                    expander_placeholder))
+        asyncio.run(
+            get_stream_data(
+                "http://backend:80/run-slide-gen",
+                {"path": "./data/summaries_test"},
+                expander_placeholder,
+            )
+        )
         print("Workflow finished. Received lines:")
         print(st.session_state.received_lines)
 

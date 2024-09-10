@@ -109,33 +109,39 @@ Ensure that the summary is clear and concise, avoiding unnecessary jargon or ove
 
 """
 
-summary2outline_requriements = """
+summary2outline_requirements = """
 
 - Use the paper title as the slide title
-- Use the summary in the markdown file as the slide content, convert the markdown headings to
- bullet points by prepending each heading text with a bullet (* or -). You can choose to maintain
- the hierarchy by using indentation.
-- Rephrase the content to make it more concise, and straight to the point
-- Each bullet point should be less than 15 words
-- A paragraph of text in the slide should be less than 25 words.
+- Use the summary in the markdown file as the slide content, convert the main markdown headings (Key Approach,
+ Key Components/Steps, Model Training/Finetuning, Dataset Details, Evaluation Methods and Metrics, Conclusion) to
+ bullet points by prepending each heading text with a bullet (* or -).
+- Rephrase the content under each bullet point to make it more concise, and straight to the point, one or two
+ sentences, maximum 20 words.
 """
 
-SUMMARY2OUTLINE_PMT = """
+SUMMARY2OUTLINE_PMT = (
+    """
 You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
 You will receive a markdown string that contains the summary of papers and 
 you will generate a slide outlines for each paper.
-Requirements:""" + summary2outline_requriements + """
+Requirements:"""
+    + summary2outline_requirements
+    + """
 
 Here is the markdown content: {summary} 
 """
+)
 
-MODIFY_SUMMARY2OUTLINE_PMT = """
+MODIFY_SUMMARY2OUTLINE_PMT = (
+    """
 You are an AI that modifies the slide outlines generated according to given user feedback.
 The original summary is '''{summary_txt}'''.
 Previously generated outline is '''{outline_txt}'''.
 The feedback provided is: '''{feedback}'''.
 Please modify the outline based on the feedback and provide the updated outline, respecting
- the original requirements:""" + summary2outline_requriements
+ the original requirements:"""
+    + summary2outline_requirements
+)
 
 AUGMENT_LAYOUT_PMT = """
 You are an AI that selects slide layout from a template for the slide text given.
@@ -159,9 +165,9 @@ Here is the slide content:
 # - if the slide text is list of topics or agenda, select one of the 'Agenda' layout
 # - if the slide text contains text and some paragraph, select one of the 'Content' layout
 # - if the slide text is very short, depending on the text, select either 'Frontpage' or 'Thank you' layout
-#- Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
+# - Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
 # by the order they appear in the list of placeholders)
-#- Use appropriate color and style from the template to make the slide visually appealing
+# - Use appropriate color and style from the template to make the slide visually appealing
 
 SLIDE_GEN_PMT = """
 You are an AI that generate slide deck from a given slide outlines and uses the
@@ -185,28 +191,26 @@ Requirement:
 - Save the final slide pptx file with name `{final_slide_fname}`
 
 """
-#- For each key heading in the paper summary, create a different text box in the slide
-#- For different level of heading in the summary markdown, create paragraph with
+# - For each key heading in the paper summary, create a different text box in the slide
+# - For different level of heading in the summary markdown, create paragraph with
 #  appropriate font size in the text box
 
 SLIDE_VALIDATION_PMT = """
 You are an AI that validates the slide deck generated according to following rules:
-- The slide need to have a front page 
-- The slide need to have a final page (e.g. a 'thank you' or 'questions' page)
 - The slide texts are clearly readable, not cut off, not overflowing the textbox
  and not overlapping with other elements
 
-If any of the above rules are violated, you need to provide the index of the slide that violates the rule,
- as well as suggestion on how to fix it. Note: missing key aspect can be due to the font size being too large
- and the text is not visible in the slide, make sure to suggest checking the original slide content texts to
- see if they exist, and reducing the font size as a solution.
+If any of the above rules are violated, you need to provide the page index (index starts from 0) of the slide
+ that violates the rule, as well as suggestion on how to fix it. Note: missing key aspect can be due to the 
+ font size being too large and the text is not visible in the slide, make sure to suggest checking the original 
+ slide content texts to see if they exist, and reducing the font size of the corresponding content 
+ text box as a solution.
+If all rules are satisfied, you need to provide a message that the slide deck is valid.
 
 """
 
 SLIDE_MODIFICATION_PMT = """
 You are an AI that modifies the slide deck according to given feedback using python-pptx library.
-The original slide deck can be found here {pptx_path}. 
-The feedback provided is as follows: {feedback}.
-Save the modified slide deck as {modified_pptx_path}.
+You need to modify the latest version of the slide deck and save a new version of the slide deck.
 
 """

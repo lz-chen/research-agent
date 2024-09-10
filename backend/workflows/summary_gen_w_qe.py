@@ -19,10 +19,15 @@ from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex, load_index_from_storage
+from llama_index.core import (
+    SimpleDirectoryReader,
+    StorageContext,
+    VectorStoreIndex,
+    load_index_from_storage,
+)
 from llama_index.core import Settings
 from config import settings
-from prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
+from prompts.prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 from utils.visualization import visualize_nodes_with_attributes
@@ -43,25 +48,25 @@ Settings.embed_model = aoai_embedder
 
 
 def fname_to_collection_name(fname: str):
-    return re.sub(r'\W+', '_', fname.split("/")[-1]).lower()
+    return re.sub(r"\W+", "_", fname.split("/")[-1]).lower()
 
 
 def load_json_toc(toc_file: Path):
-    with open(toc_file, 'r') as f:
+    with open(toc_file, "r") as f:
         toc_dict = json.load(f)
-    return toc_dict['toc']
+    return toc_dict["toc"]
 
 
 def toc_json_to_markdown(toc_file: Path):
     toc_dict = load_json_toc(toc_file)
     markdown_lines = []
     for item in toc_dict:
-        level = item['level']
-        title = item['title']
-        heading = '#' * (level + 1) + ' ' + title
+        level = item["level"]
+        title = item["title"]
+        heading = "#" * (level + 1) + " " + title
         markdown_lines.append(heading)
 
-    return '\n'.join(markdown_lines)
+    return "\n".join(markdown_lines)
 
 
 def setup_vector_store(collection_name: str):
@@ -85,7 +90,7 @@ def setup_doc_store(namespace: str):
         settings.REDIS_HOST,
         settings.REDIS_PORT,
         # namespace="SourceDocs",
-        namespace=namespace
+        namespace=namespace,
     )
 
 
@@ -96,25 +101,29 @@ def setup_index_store(namespace: str, collection_suffix: str):
         port=settings.REDIS_PORT,
         namespace=namespace,
         # collection_suffix="/index"
-        collection_suffix=collection_suffix
+        collection_suffix=collection_suffix,
     )
 
 
 def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
-    documents = SimpleDirectoryReader(input_dir=parsed_paper_dir.as_posix(),
-                                      # file_extractor=file_extractor
-                                      required_exts=[".md"], filename_as_id=True,
-                                      ).load_data()
+    documents = SimpleDirectoryReader(
+        input_dir=parsed_paper_dir.as_posix(),
+        # file_extractor=file_extractor
+        required_exts=[".md"],
+        filename_as_id=True,
+    ).load_data()
 
     # setup the vector store
     collection_name = fname_to_collection_name(parsed_paper_dir.as_posix())
     vector_store = setup_vector_store(collection_name)
     doc_store = setup_doc_store(namespace=f"ra_qe_{collection_name}")
-    index_store = setup_index_store(namespace=f"ra_qe_{collection_name}",
-                                    collection_suffix=f"/index_ra_qe_{collection_name}")
-    storage_context = StorageContext.from_defaults(vector_store=vector_store,
-                                                   docstore=doc_store,
-                                                   index_store=index_store)
+    index_store = setup_index_store(
+        namespace=f"ra_qe_{collection_name}",
+        collection_suffix=f"/index_ra_qe_{collection_name}",
+    )
+    storage_context = StorageContext.from_defaults(
+        vector_store=vector_store, docstore=doc_store, index_store=index_store
+    )
 
     # setup ingest pipeline
     # node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
@@ -139,22 +148,30 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
 
     nodes = pipeline.run(documents=documents)  # this nodes doesn't contain objects???
     if nodes:
-        logging.info(f"Successfully ingested {len(nodes)} nodes. Saving node visualizations...")
-        visualize_nodes_with_attributes(nodes,
-                                        graph_name_prefix=f"workflow_artifacts/node_visualizations/{collection_name}")
+        logging.info(
+            f"Successfully ingested {len(nodes)} nodes. Saving node visualizations..."
+        )
+        visualize_nodes_with_attributes(
+            nodes,
+            graph_name_prefix=f"workflow_artifacts/node_visualizations/{collection_name}",
+        )
         # # Retrieve nodes (text) and objects (table)
         # nodes = node_parser.get_nodes_from_documents(documents)
         # base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
 
-        logging.info(f"Creating index with name {collection_name} for '{parsed_paper_dir}'")
+        logging.info(
+            f"Creating index with name {collection_name} for '{parsed_paper_dir}'"
+        )
         index = VectorStoreIndex(
             # nodes=base_nodes + objects,
             nodes=nodes,
-            storage_context=storage_context
+            storage_context=storage_context,
         )
         index.set_index_id(collection_name)
     else:
-        logging.info(f"No new nodes ingested, loading index {collection_name} from storage context...")
+        logging.info(
+            f"No new nodes ingested, loading index {collection_name} from storage context..."
+        )
         index = load_index_from_storage(storage_context, index_id=collection_name)
 
     query_engine = index.as_query_engine(similarity_top_k=10)
@@ -162,7 +179,9 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
     return query_engine
 
 
-def save_paper_sumamry(paper_name: str, summary_text: str, output_dir: str = "./data/summaries"):
+def save_paper_sumamry(
+    paper_name: str, summary_text: str, output_dir: str = "./data/summaries"
+):
     """
     Save the paper summary to a markdown file
     :param paper_name: name of the paper, will be part of the file name
@@ -197,21 +216,34 @@ def create_agent(file_dir: Path, force_reingest: bool):
     save_tool = FunctionTool.from_defaults(fn=save_paper_sumamry)
 
     # chat_formatter = ReActChatFormatter(context=SUMMARIZE_PAPER_PMT)
-    agent = ReActAgent.from_tools([query_tool, save_tool], llm=llm_gpt4o,
-                                  # react_chat_formatter=chat_formatter,
-                                  max_iterations=30,
-                                  verbose=True)
+    agent = ReActAgent.from_tools(
+        [query_tool, save_tool],
+        llm=llm_gpt4o,
+        # react_chat_formatter=chat_formatter,
+        max_iterations=30,
+        verbose=True,
+    )
     prompt = SUMMARIZE_PAPER_PMT + REACT_PROMPT_SUFFIX
     agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
     agent.chat(f"I want a summary of paper {file_dir}")
 
 
 @click.command()
-@click.option("--parsed-paper-dir", "-d", required=False,
-              default="./data/parsed_papers",
-              help="Path to the directory that contains file to parse and create the query engine")
-@click.option("--force-reingest", "-f", required=False, default=False, is_flag=True,
-              help="Force re-ingest the data to the vector store")
+@click.option(
+    "--parsed-paper-dir",
+    "-d",
+    required=False,
+    default="./data/parsed_papers",
+    help="Path to the directory that contains file to parse and create the query engine",
+)
+@click.option(
+    "--force-reingest",
+    "-f",
+    required=False,
+    default=False,
+    is_flag=True,
+    help="Force re-ingest the data to the vector store",
+)
 def main(parsed_paper_dir: str, force_reingest: bool):
     parsed_paper_folders = [f for f in Path(parsed_paper_dir).iterdir() if f.is_dir()]
     for f in parsed_paper_folders:
