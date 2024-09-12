@@ -11,6 +11,12 @@ This repository contains a research agent application designed to facilitate pap
 ├── frontend                    # Frontend code using Streamlit
 │   ├── pages                   # Streamlit pages
 │   └── assets                  # Static assets for the frontend
+├── backend                     # Backend code using FastAPI
+│   ├── app                     # FastAPI application files
+│   └── tests                   # Tests for the backend
+├── frontend                    # Frontend code using Streamlit
+│   ├── pages                   # Streamlit pages
+│   └── assets                  # Static assets for the frontend
 ├── docker                      # Docker-related files
 └── config                      # Configuration files
 ```
@@ -48,6 +54,12 @@ This repository contains a research agent application designed to facilitate pap
 
 - **Slide Generation**: Navigate to the "Slide Generation" page in the Streamlit app, enter the directory path for slide generation, and submit the form to start the process.
 - **Feedback**: Provide feedback on the generated slide outlines directly in the app.
+
+## Frontend
+
+- **Streamlit Application**: The frontend is built using Streamlit, providing an interactive interface for users to generate slides and view research summaries.
+- **Pages**: Located in the `frontend/pages` directory, each page corresponds to a different functionality of the application.
+- **Assets**: Static files such as images and stylesheets are stored in the `frontend/assets` directory.
 
 ## Development
 
