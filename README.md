@@ -43,47 +43,18 @@ the frontend part of this project is still under development.
    ```bash
    git clone <repository-url>
    cd <repository-directory>
-   ```
-
-2. **Build and run the Docker containers**:
-   ```bash
-   docker-compose up --build
-   ```
-
-3. **Access the application**:
-   - Frontend: Open your browser and go to `http://localhost:8501`
-   - Backend: API documentation available at `http://localhost:8000/docs`
-
-## Usage
-
-- **Slide Generation**: Navigate to the "Slide Generation" page in the Streamlit app, enter the directory path for slide generation, and submit the form to start the process.
-
-## Running Backend Script Separately
-
-To run the backend script without setting up Docker Compose, follow these steps:
-
-1. **Navigate to the backend directory**:
-   ```bash
-   cd backend
-   ```
-
-2. **Install dependencies**:
-   Ensure you have Python 3.12 installed, then install the dependencies using Poetry:
-   ```bash
+   # install dependencies
    poetry install
    ```
 
-3. **Run the backend script**:
-   You can run the FastAPI application directly using Uvicorn:
-   ```bash
-   poetry run uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
+2. Set up the environment variables by creating a `.env` file in the root directory,
+    and add the following environment variables as those listed in `.env.example`
 
-4. **Access the API**:
-   Once the server is running, you can access the API documentation at `http://localhost:8000/docs`.
+## Usage
 
-## Frontend
+To run the research agent workflow, from root directory, run the following command:
 
-- **Streamlit Application**: The frontend is built using Streamlit, providing an interactive interface for users to generate slides and view research summaries.
-- **Pages**: Located in the `frontend/pages` directory, each page corresponds to a different functionality of the application.
-- **Assets**: Static files such as images and stylesheets are stored in the `frontend/assets` directory.
+```bash
+poetry run python backend/workflows/summarize_and_generate_slides.py -q <YOUR_INPUT_QUERY>
+```
+

@@ -172,6 +172,8 @@ outputs/*
 
 
 **.aider**
+chat
+
 /workflow_artifacts/
 
 **__pycache__**__pycache__/
@@ -185,3 +187,6 @@ ENV/
 build/
 dist/
 *.egg-info/
+
+**mlruns
+mlruns.db

@@ -18,8 +18,6 @@ class Settings(BaseSettings):
 
     AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT: str
 
-    LLAMA_CLOUD_API_KEY: str
-
     # vector store
     QDRANT_HOST: str
     QDRANT_PORT: str
