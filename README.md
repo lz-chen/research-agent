@@ -7,6 +7,23 @@ This repository contains a research agent application designed to facilitate pap
 ```
 ├── backend                     # Backend code using FastAPI
 │   ├── app                     # FastAPI application files
+│   ├── config.py               # Configuration settings
+│   ├── models.py               # Pydantic models
+│   ├── services                # Services for LLMs and embeddings
+│   ├── utils                   # Utility functions
+│   ├── workflows               # Workflow scripts
+│   ├── Dockerfile              # Dockerfile for backend
+│   ├── pyproject.toml          # Backend dependencies
+│   └── main.py                 # Main entry point for FastAPI
+├── frontend                    # Frontend code using Streamlit
+│   ├── pages                   # Streamlit pages
+│   ├── Dockerfile              # Dockerfile for frontend
+│   ├── pyproject.toml          # Frontend dependencies
+│   └── app.py                  # Main entry point for Streamlit
+├── docker                      # Docker-related files
+└── config                      # Configuration files
+├── backend                     # Backend code using FastAPI
+│   ├── app                     # FastAPI application files
 │   └── tests                   # Tests for the backend
 ├── frontend                    # Frontend code using Streamlit
 │   ├── pages                   # Streamlit pages
