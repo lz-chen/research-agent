@@ -2,7 +2,18 @@
 
 This repository contains a research agent application designed to facilitate paper research and slide generation. It consists of a backend powered by FastAPI and a frontend built with Streamlit.
 
-## Features
+## Project Structure
+
+```
+├── backend                     # Backend code using FastAPI
+│   ├── app                     # FastAPI application files
+│   └── tests                   # Tests for the backend
+├── frontend                    # Frontend code using Streamlit
+│   ├── pages                   # Streamlit pages
+│   └── assets                  # Static assets for the frontend
+├── docker                      # Docker-related files
+└── config                      # Configuration files
+```
 
 - **Slide Generation**: Generate slides from research papers using a workflow agent.
 - **Streaming Data**: Real-time updates from the backend to the frontend.
