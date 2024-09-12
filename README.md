@@ -50,6 +50,10 @@ the frontend part of this project is still under development.
 2. Set up the environment variables by creating a `.env` file in the root directory,
     and add the following environment variables as those listed in `.env.example`
 
+3. Setup mlflow for tracing:
+    ```bash
+     mlflow server --backend-store-uri sqlite:///mlruns.db --default-artifact-root ./mlruns
+    ```
 ## Usage
 
 To run the research agent workflow, from root directory, run the following command:
