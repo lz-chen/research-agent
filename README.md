@@ -58,6 +58,30 @@ the frontend part of this project is still under development.
 
 - **Slide Generation**: Navigate to the "Slide Generation" page in the Streamlit app, enter the directory path for slide generation, and submit the form to start the process.
 
+## Running Backend Script Separately
+
+To run the backend script without setting up Docker Compose, follow these steps:
+
+1. **Navigate to the backend directory**:
+   ```bash
+   cd backend
+   ```
+
+2. **Install dependencies**:
+   Ensure you have Python 3.12 installed, then install the dependencies using Poetry:
+   ```bash
+   poetry install
+   ```
+
+3. **Run the backend script**:
+   You can run the FastAPI application directly using Uvicorn:
+   ```bash
+   poetry run uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+
+4. **Access the API**:
+   Once the server is running, you can access the API documentation at `http://localhost:8000/docs`.
+
 ## Frontend
 
 - **Streamlit Application**: The frontend is built using Streamlit, providing an interactive interface for users to generate slides and view research summaries.
