@@ -1,25 +1,28 @@
 # Research Agent
 
-This repository contains a research agent application designed to facilitate paper research and slide generation. It consists of a backend powered by FastAPI and a frontend built with Streamlit.
+This repository contains a research agent application designed to
+facilitate paper research and slide generation. It consists of a
+backend powered by FastAPI and a frontend built with Streamlit.
+
+**Note:**
+the frontend part of this project is still under development.
 
 ## Project Structure
 
 ```
 ├── backend                     # Backend code using FastAPI
-│   ├── app                     # FastAPI application files
-│   ├── config.py               # Configuration settings
-│   ├── models.py               # Pydantic models
+│   ├── prompts                 # Prompts used in the workflow 
 │   ├── services                # Services for LLMs and embeddings
 │   ├── utils                   # Utility functions
-│   ├── workflows               # Workflow scripts
+│   ├── workflows               # Workflow difinitions
+│   ├── config.py               # Configuration settings
+│   ├── models.py               # Pydantic models
+│   ├── main.py                 # Main entry point for FastAPI
 │   ├── Dockerfile              # Dockerfile for backend
 │   ├── pyproject.toml          # Backend dependencies
-│   ├── main.py                 # Main entry point for FastAPI
-│   ├── prompts                 # Prompt templates
 │   └── __init__.py             # Package initialization
 ├── frontend                    # Frontend code using Streamlit
 │   ├── pages                   # Streamlit pages
-│   ├── assets                  # Static assets for the frontend
 │   ├── Dockerfile              # Dockerfile for frontend
 │   ├── pyproject.toml          # Frontend dependencies
 └── └── app.py                  # Main entry point for Streamlit
@@ -34,8 +37,11 @@ This repository contains a research agent application designed to facilitate pap
 
 ## Prerequisites
 
+- Python >= 3.12
+- Poetry
 - Docker
 - Docker Compose
+
 
 ## Setup
 
@@ -57,23 +63,9 @@ This repository contains a research agent application designed to facilitate pap
 ## Usage
 
 - **Slide Generation**: Navigate to the "Slide Generation" page in the Streamlit app, enter the directory path for slide generation, and submit the form to start the process.
-- **Feedback**: Provide feedback on the generated slide outlines directly in the app.
 
 ## Frontend
 
 - **Streamlit Application**: The frontend is built using Streamlit, providing an interactive interface for users to generate slides and view research summaries.
 - **Pages**: Located in the `frontend/pages` directory, each page corresponds to a different functionality of the application.
 - **Assets**: Static files such as images and stylesheets are stored in the `frontend/assets` directory.
-
-## Development
-
-- **Backend**: Located in the `backend` directory, using FastAPI.
-- **Frontend**: Located in the `frontend` directory, using Streamlit.
-
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request.
-
-## License
-
-This project is licensed under the MIT License.
