@@ -28,12 +28,6 @@ the frontend part of this project is still under development.
 └── └── app.py                  # Main entry point for Streamlit
 ```
 
-## Features
-
-- **Slide Generation**: Generate slides from research papers using a workflow agent.
-- **Streaming Data**: Real-time updates from the backend to the frontend.
-- **Azure CLI Integration**: Utilize Azure services within the backend.
-- **Document Conversion**: Convert documents using `unoconv` and LibreOffice.
 
 ## Prerequisites
 
