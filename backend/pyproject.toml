@@ -37,6 +37,7 @@ fastapi = "^0.112.2"
 uvicorn = "^0.30.6"
 azure-cli= "^2.64.0"
 llama-index-tools-tavily-research = "^0.2.0"
+mlflow = "^2.16.0"
 
 [build-system]
 requires = ["poetry-core"]
