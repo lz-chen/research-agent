@@ -36,15 +36,15 @@ services:
     volumes:
       - ./mlruns:/mlflow/mlruns
       - ./.env:/app/.env
-    environment:
-      MLFLOW_TRACKING_URI: "http://0.0.0.0:5000"
-      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
-      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/mlflow/mlruns"
+#    environment:
+#      MLFLOW_TRACKING_URI: "http://0.0.0.0:5000"
+#      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
+#      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/mlflow/mlruns"
     command: >
       mlflow ui --port 8080 
       --backend-store-uri sqlite:///mlruns.db 
       --default-artifact-root ./mlruns
-      --host 0.0.0.0
+      --host 127.0.0.1
 
 networks:
   app-network:

@@ -98,6 +98,9 @@ class SlideGenerationWorkflow(Workflow):
         self.all_layout = get_all_layouts_info(self.slide_template_path)
         self.all_layout_tool = FunctionTool.from_defaults(fn=self.get_all_layout)
 
+        self.user_input_event = asyncio.Event()
+        self.user_input = None
+
     def get_all_layout(self):
         """Get all layout information"""
         return self.all_layout
@@ -210,11 +213,11 @@ class SlideGenerationWorkflow(Workflow):
         json_resp = {"original_summary": ev.summary}
         json_resp.update(json.loads(response.json()))
 
-        ctx.write_event_to_stream(
-            Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}]/json: {json.dumps(json_resp)}"
-            )
-        )
+        # ctx.write_event_to_stream(
+        #     Event(
+        #         msg=f"[{inspect.currentframe().f_code.co_name}]/json: {json.dumps(json_resp)}"
+        #     )
+        # )
         return OutlineEvent(summary=ev.summary, outline=response)
 
     @step(pass_context=True)
@@ -229,17 +232,47 @@ class SlideGenerationWorkflow(Workflow):
             )
         )
 
-        print(f"the original summary is: {ev.summary}")
-        print(f"the outline is: {ev.outline}")
-        print("Do you want to proceed with this outline? (yes/no):")
+        # Send a special event indicating that user input is needed
+        ctx.write_event_to_stream(
+            Event(
+                msg=json.dumps({
+                    "event": "request_user_input",
+                    "summary": ev.summary,
+                    "outline": ev.outline.dict(),
+                })
+            )
+        )
+        # Wait for user input
+        await self.user_input_event.wait()
+        user_response = self.user_input  # Get the user's response
+        self.user_input_event.clear()  # Reset the event for future use
+
+        # print(f"the original summary is: {ev.summary}")
+        # print(f"the outline is: {ev.outline}")
+        # print("Do you want to proceed with this outline? (yes/no):")
         # feedback = input()
-        feedback = "yes"
-        if feedback.lower().strip() in ["yes", "y"]:
+        # feedback = "yes"
+        if user_response.lower().strip() in ["yes", "y"]:
             return OutlineOkEvent(summary=ev.summary, outline=ev.outline)
         else:
-            print("Please provide feedback on the outline:")
+            # print("Please provide feedback on the outline:")
             # feedback = input()
-            feedback = "The outline is too verbose, please make it more concise."
+            # feedback = "The outline is too verbose, please make it more concise."
+            # Request detailed feedback
+            ctx.write_event_to_stream(
+                Event(
+                    msg=json.dumps({
+                        "event": "request_feedback",
+                        "message": "Please provide feedback on the outline:",
+                    })
+                )
+            )
+
+            # Wait for feedback input
+            await self.user_input_event.wait()
+            feedback = self.user_input
+            self.user_input_event.clear()
+
             return OutlineFeedbackEvent(
                 summary=ev.summary, outline=ev.outline, feedback=feedback
             )
