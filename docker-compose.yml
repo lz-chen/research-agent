@@ -26,5 +26,18 @@ services:
     networks:
       - app-network
 
+  mlflow:
+    image: mlflow/mlflow:latest
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./.env:/app/.env
+    environment:
+      MLFLOW_TRACKING_URI: "http://0.0.0.0:5000"
+      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
+
 networks:
   app-network:
