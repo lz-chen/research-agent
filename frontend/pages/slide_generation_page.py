@@ -49,7 +49,7 @@ async def get_stream_data(url, payload, message_queue, user_input_event):
                     message_queue.put(('workflow_id', message["workflow_id"]))
                     continue
                 event_type = message.get("event")
-                if event_type == "request_user_input":
+                if event_type in ["request_user_input", "request_feedback"]:
                     # Send the message to the main thread
                     message_queue.put(('user_input_required', message))
                     # Wait until user input is provided
@@ -96,6 +96,7 @@ def user_input_fragment():
     if st.session_state.user_input_required:
         message = st.session_state.user_input_prompt
         event_type = message.get("event")
+        st.write(f"Event received: {event_type}")  # Logging
         if event_type == "request_user_input":
             summary = message.get("summary")
             outline = message.get("outline")
@@ -109,6 +110,7 @@ def user_input_fragment():
                 key="user_response",
             )
             if st.button("Submit Response", key="submit_response"):
+                st.write(f"Submitting response: {user_response}")  # Logging
                 # Send the user's response to the backend
                 requests.post(
                     "http://backend:80/submit_user_input",
@@ -122,8 +124,10 @@ def user_input_fragment():
                 # Signal the background thread
                 st.session_state.user_input_event.set()
         elif event_type == "request_feedback":
-            feedback = st.text_input(message.get("message"), key="user_feedback")
+            st.write("Please provide your feedback below:")  # Logging
+            feedback = st.text_area(message.get("message"), key="user_feedback")
             if st.button("Submit Feedback", key="submit_feedback"):
+                st.write(f"Submitting feedback: {feedback}")  # Logging
                 requests.post(
                     "http://backend:80/submit_user_input",
                     json={

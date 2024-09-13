@@ -75,6 +75,10 @@ class SlideGenerationWorkflow(Workflow):
     final_slide_fname: str = "paper_summaries.pptx"
     slide_outlines_fname: str = "slide_outlines.json"
 
+    async def run(self, *args, **kwargs):
+        self.loop = asyncio.get_running_loop()  # Store the event loop
+        return await super().run(*args, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
@@ -98,7 +102,7 @@ class SlideGenerationWorkflow(Workflow):
         self.all_layout = get_all_layouts_info(self.slide_template_path)
         self.all_layout_tool = FunctionTool.from_defaults(fn=self.get_all_layout)
 
-        self.user_input_event = asyncio.Event()
+        self.user_input_future = asyncio.Future()
         self.user_input = None
 
     def get_all_layout(self):
@@ -136,10 +140,10 @@ class SlideGenerationWorkflow(Workflow):
 
     def run_react_agent(self, agent, task, ctx):
         step_output = agent.run_step(task.task_id)
-        self._agent_thought_to_stream(ctx, task)
+        # self._agent_thought_to_stream(ctx, task)
         while not step_output.is_last:
             step_output = agent.run_step(task.task_id)
-            self._agent_thought_to_stream(ctx, task)
+            # self._agent_thought_to_stream(ctx, task)
         response = agent.finalize_response(task.task_id)
         ctx.write_event_to_stream(
             Event(
@@ -147,7 +151,7 @@ class SlideGenerationWorkflow(Workflow):
             )
         )
 
-    @step(pass_context=True, num_workers=4)
+    @step(pass_context=True, num_workers=1)
     def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
@@ -170,7 +174,7 @@ class SlideGenerationWorkflow(Workflow):
             )
             self.send_event(SummaryEvent(summary=s))
 
-    @step(pass_context=True, num_workers=4)
+    @step(pass_context=True, num_workers=1)
     async def summary2outline(
             self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
     ) -> OutlineEvent:
@@ -242,10 +246,16 @@ class SlideGenerationWorkflow(Workflow):
                 })
             )
         )
+        # Initialize the future if it's None
+        if self.user_input_future is None:
+            self.user_input_future = self.loop.create_future()
+
         # Wait for user input
-        await self.user_input_event.wait()
-        user_response = self.user_input  # Get the user's response
-        self.user_input_event.clear()  # Reset the event for future use
+        logging.info(f"gather_feedback_outline: Event loop id {id(self.loop)}")
+        logging.info("gather_feedback_outline: Waiting for user input")
+        user_response = await self.user_input_future
+        logging.info(f"gather_feedback_outline: Got user response: {user_response}")
+        self.user_input_future = self.loop.create_future()  # Reset for future use
 
         # print(f"the original summary is: {ev.summary}")
         # print(f"the outline is: {ev.outline}")
@@ -268,10 +278,12 @@ class SlideGenerationWorkflow(Workflow):
                 )
             )
 
-            # Wait for feedback input
-            await self.user_input_event.wait()
-            feedback = self.user_input
-            self.user_input_event.clear()
+            # Wait for user input
+            logging.info(f"gather_feedback_outline: Event loop id {id(self.loop)}")
+            logging.info("gather_feedback_outline: Waiting for user input")
+            feedback = await self.user_input_future
+            logging.info(f"gather_feedback_outline: Got user feedback: {feedback}")
+            self.user_input_future = self.loop.create_future()  # Reset for future use
 
             return OutlineFeedbackEvent(
                 summary=ev.summary, outline=ev.outline, feedback=feedback
@@ -335,6 +347,11 @@ class SlideGenerationWorkflow(Workflow):
     async def slide_gen(
             self, ctx: Context, ev: OutlinesWithLayoutEvent
     ) -> SlideGeneratedEvent:
+        ctx.write_event_to_stream(
+            Event(
+                msg=f"[{inspect.currentframe().f_code.co_name}] Agent is generating slide deck..."
+            )
+        )
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
             llm=new_gpt4o(0.1),
