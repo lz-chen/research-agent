@@ -3,10 +3,17 @@ import asyncio
 from fastapi.responses import StreamingResponse
 import uuid
 import json
+import logging
 from models import SlideGenFileDirectory, ResearchTopic
 from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summarize_and_generate_slides import SummaryAndSlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 app = FastAPI()
 workflows = {}  # Store the workflow instances in a dictionary
@@ -28,13 +35,13 @@ async def run_workflow_endpoint(topic: ResearchTopic):
 
     async def event_generator():
         loop = asyncio.get_running_loop()
-        print(f"event_generator: loop id {id(loop)}")
+        logging.info(f"event_generator: loop id {id(loop)}")
         yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
         task = asyncio.create_task(wf.run(user_query=topic.query))
-        print(f"event_generator: Created task {task}")
+        logging.info(f"event_generator: Created task {task}")
         try:
             async for ev in wf.stream_events():
-                print(f"Sending message to frontend: {ev.msg}")
+                logging.info(f"Sending message to frontend: {ev.msg}")
                 yield f"{ev.msg}\n\n"
                 await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
             final_result = await task
@@ -42,7 +49,7 @@ async def run_workflow_endpoint(topic: ResearchTopic):
             yield f"{json.dumps({'final_result': final_result})}\n\n"
         except Exception as e:
             error_message = f"Error in workflow: {str(e)}"
-            print(error_message)
+            logging.error(error_message)
             yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
         finally:
             # Clean up
@@ -58,12 +65,12 @@ async def submit_user_input(data: dict = Body(...)):
     wf = workflows.get(workflow_id)
     if wf and wf.user_input_future:
         loop = wf.user_input_future.get_loop()  # Get the loop from the future
-        print(f"submit_user_input: wf.user_input_future loop id {id(loop)}")
+        logging.info(f"submit_user_input: wf.user_input_future loop id {id(loop)}")
         if not wf.user_input_future.done():
             loop.call_soon_threadsafe(wf.user_input_future.set_result, user_input)
-            print("submit_user_input: set_result called")
+            logging.info("submit_user_input: set_result called")
         else:
-            print("submit_user_input: future already done")
+            logging.info("submit_user_input: future already done")
         return {"status": "input received"}
     else:
         raise HTTPException(status_code=404, detail="Workflow not found or future not initialized")
