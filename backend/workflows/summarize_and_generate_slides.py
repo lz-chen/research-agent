@@ -7,6 +7,14 @@ from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
 import sys
+
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 from llama_index.core.workflow import (
     Context,
     StartEvent,
