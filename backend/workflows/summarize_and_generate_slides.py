@@ -21,13 +21,6 @@ from workflows.events import *
 from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
 
-logging.basicConfig(
-    stream=sys.stdout,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
 Settings.llm = llm_gpt4o
 Settings.embed_model = aoai_embedder
 
