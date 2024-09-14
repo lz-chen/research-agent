@@ -21,7 +21,6 @@ from workflows.events import *
 from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
 
-
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
@@ -34,20 +33,48 @@ Settings.embed_model = aoai_embedder
 
 
 class SummaryAndSlideGenerationWorkflow(Workflow):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize user input future
+        self.user_input_future = asyncio.Future()
+
+    async def run(self, *args, **kwargs):
+        self.loop = asyncio.get_running_loop()  # Store the event loop
+        return await super().run(*args, **kwargs)
+
+    async def reset_user_input_future(self):
+        self.user_input_future = self.loop.create_future()
+
+    async def run_subworkflow(self, sub_wf, ctx, **kwargs):
+        sub_wf.user_input_future = self.user_input_future
+        sub_wf.parent_workflow = self
+        # Start the sub-workflow
+        sub_task = asyncio.create_task(sub_wf.run(**kwargs))
+        # While the sub-workflow is running, relay its events
+        async for event in sub_wf.stream_events():
+            ctx.write_event_to_stream(event)
+        # Wait for the sub-workflow to complete
+        result = await sub_task
+        return result
+
     @step
     async def summary_gen(
-        self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
+            self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
     ) -> SummaryWfReadyEvent:
-        print("Need to run reflection")
-        res = await summary_gen_wf.run(user_query=ev.user_query)
+        # res = await summary_gen_wf.run(user_query=ev.user_query)
+        res = await self.run_subworkflow(summary_gen_wf, ctx, user_query=ev.user_query)
+
         return SummaryWfReadyEvent(summary_dir=res)
 
     @step
     async def slide_gen(
-        self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenerationWorkflow
+            self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenerationWorkflow
     ) -> StopEvent:
-        res = await slide_gen_wf.run(file_dir=ev.summary_dir)
-        return StopEvent()
+        # res = await slide_gen_wf.run(file_dir=ev.summary_dir)
+        res = await self.run_subworkflow(slide_gen_wf, ctx, file_dir=ev.summary_dir)
+
+        return StopEvent(res)
 
 
 async def run_workflow(user_query: str):
