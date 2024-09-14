@@ -71,9 +71,9 @@ def read_summary_content(file_path: Path):
 
 class SlideGenerationWorkflow(Workflow):
     max_validation_retries: int = 5
-    slide_template_path: str = "./data/Inmeta 2023 template.pptx"
-    final_slide_fname: str = "paper_summaries.pptx"
-    slide_outlines_fname: str = "slide_outlines.json"
+    slide_template_path: str = settings.SLIDE_TEMPLATE_PATH
+    final_slide_fname: str = settings.FINAL_SLIDE_FNAME
+    slide_outlines_fname: str = settings.SLIDE_OUTLINE_FNAME
 
     async def run(self, *args, **kwargs):
         self.loop = asyncio.get_running_loop()  # Store the event loop
@@ -134,7 +134,12 @@ class SlideGenerationWorkflow(Workflow):
         for r in cur_reasonings:
             ctx.write_event_to_stream(
                 Event(
-                    msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Reasoning: {r.get_content()}"
+                    msg=WorkflowStreamingEvent(
+                        event_type="server_message",
+                        event_sender=inspect.currentframe().f_code.co_name,
+                        event_content={"message": f"React Agent Reasoning: {r.get_content()}"},
+                    ).json()
+                    # msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Reasoning: {r.get_content()}"
                 )
             )
 
@@ -147,7 +152,12 @@ class SlideGenerationWorkflow(Workflow):
         response = agent.finalize_response(task.task_id)
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Final Response: {response}"
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": f"React Agent Final Response: {response}"},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] React Agent Final Response: {response}"
             )
         )
 
@@ -157,7 +167,12 @@ class SlideGenerationWorkflow(Workflow):
         directory. For each summary file, send a SummaryEvent to the next step."""
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Reading summaries from markdown files..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": "Reading summaries from markdown files..."},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Reading summaries from markdown files..."
             )
         )
         ctx.data["n_retry"] = 0  # keep count of slide validation retries
@@ -169,7 +184,12 @@ class SlideGenerationWorkflow(Workflow):
             s = read_summary_content(f)
             ctx.write_event_to_stream(
                 Event(
-                    msg=f"[{inspect.currentframe().f_code.co_name}] Sending {i}th summaries..."
+                    msg=WorkflowStreamingEvent(
+                        event_type="server_message",
+                        event_sender=inspect.currentframe().f_code.co_name,
+                        event_content={"message": f"Sending {i}th summaries..."},
+                    ).json()
+                    # msg=f"[{inspect.currentframe().f_code.co_name}] Sending {i}th summaries..."
                 )
             )
             self.send_event(SummaryEvent(summary=s))
@@ -183,7 +203,12 @@ class SlideGenerationWorkflow(Workflow):
         """
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Making summary to slide outline..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": "Making summary to slide outline..."},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Making summary to slide outline..."
             )
         )
         llm = new_gpt4o_mini(0.1)
@@ -232,7 +257,12 @@ class SlideGenerationWorkflow(Workflow):
         # ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Gathering feedback on the outline..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": "Gathering feedback on the outline..."},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Gathering feedback on the outline..."
             )
         )
 
@@ -240,9 +270,13 @@ class SlideGenerationWorkflow(Workflow):
         ctx.write_event_to_stream(
             Event(
                 msg=json.dumps({
-                    "event": "request_user_input",
-                    "summary": ev.summary,
-                    "outline": ev.outline.dict(),
+                    "event_type": "request_user_input",
+                    "event_sender": inspect.currentframe().f_code.co_name,
+                    "event_content": {
+                        "summary": ev.summary,
+                        "outline": ev.outline.dict(),
+                        "message": "Do you approve this outline? If not, please provide feedback."
+                    }
                 })
             )
         )
@@ -257,34 +291,19 @@ class SlideGenerationWorkflow(Workflow):
         logging.info(f"gather_feedback_outline: Got user response: {user_response}")
         self.user_input_future = self.loop.create_future()  # Reset for future use
 
-        # print(f"the original summary is: {ev.summary}")
-        # print(f"the outline is: {ev.outline}")
-        # print("Do you want to proceed with this outline? (yes/no):")
-        # feedback = input()
-        # feedback = "yes"
-        if user_response.lower().strip() in ["yes", "y"]:
+        # Process user_response, which should be a JSON string
+        try:
+            response_data = json.loads(user_response)
+            approval = response_data.get('approval', '').lower().strip()
+            feedback = response_data.get('feedback', '').strip()
+        except json.JSONDecodeError:
+            # Handle invalid JSON
+            logging.error("Invalid user response format")
+            raise Exception("Invalid user response format")
+
+        if approval == ":material/thumb_up:":
             return OutlineOkEvent(summary=ev.summary, outline=ev.outline)
         else:
-            # print("Please provide feedback on the outline:")
-            # feedback = input()
-            # feedback = "The outline is too verbose, please make it more concise."
-            # Request detailed feedback
-            ctx.write_event_to_stream(
-                Event(
-                    msg=json.dumps({
-                        "event": "request_feedback",
-                        "message": "Please provide feedback on the outline:",
-                    })
-                )
-            )
-
-            # Wait for user input
-            logging.info(f"gather_feedback_outline: Event loop id {id(self.loop)}")
-            logging.info("gather_feedback_outline: Waiting for user input")
-            feedback = await self.user_input_future
-            logging.info(f"gather_feedback_outline: Got user feedback: {feedback}")
-            self.user_input_future = self.loop.create_future()  # Reset for future use
-
             return OutlineFeedbackEvent(
                 summary=ev.summary, outline=ev.outline, feedback=feedback
             )
@@ -302,7 +321,12 @@ class SlideGenerationWorkflow(Workflow):
             return None
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Outlines for all paper is ready! Adding layout info..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": "Outlines for all papers are ready! Adding layout info..."},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Outlines for all paper is ready! Adding layout info..."
             )
         )
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
@@ -334,8 +358,16 @@ class SlideGenerationWorkflow(Workflow):
         # ctx.data["slide_outlines_json"] = slide_outlines_json
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] {len(slides_w_layout)} outlines with layout are ready!"
-                    f" Stored in {slide_outlines_json}"
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={
+                        "message": f"{len(slides_w_layout)} outlines with layout are ready! "
+                                   f"Stored in {slide_outlines_json}"
+                    },
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] {len(slides_w_layout)} outlines with layout are ready!"
+                #     f" Stored in {slide_outlines_json}"
             )
         )
 
@@ -349,7 +381,12 @@ class SlideGenerationWorkflow(Workflow):
     ) -> SlideGeneratedEvent:
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Agent is generating slide deck..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={"message": "Agent is generating slide deck..."},
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Agent is generating slide deck..."
             )
         )
         agent = ReActAgent.from_tools(
@@ -382,7 +419,14 @@ class SlideGenerationWorkflow(Workflow):
         local_files = self.download_all_files_from_session()
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Downloaded files to local path: {local_files}"
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={
+                        "message": f"Agent finished! Downloaded files to local path: {local_files}"
+                    },
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Downloaded files to local path: {local_files}"
             )
         )
         return SlideGeneratedEvent(
@@ -408,8 +452,15 @@ class SlideGenerationWorkflow(Workflow):
 
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] "
-                    f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={
+                        "message": f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
+                    },
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] "
+                #     f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
             )
         )
 
@@ -426,7 +477,12 @@ class SlideGenerationWorkflow(Workflow):
         if response.is_valid:
             ctx.write_event_to_stream(
                 Event(
-                    msg=f"[{inspect.currentframe().f_code.co_name}] The slides are fixed!"
+                    msg=WorkflowStreamingEvent(
+                        event_type="server_message",
+                        event_sender=inspect.currentframe().f_code.co_name,
+                        event_content={"message": "The slides are fixed!"}
+                    ).json()
+                    # msg=f"[{inspect.currentframe().f_code.co_name}] The slides are fixed!"
                 )
             )
             return StopEvent(
@@ -436,15 +492,29 @@ class SlideGenerationWorkflow(Workflow):
             if ctx.data["n_retry"] < self.max_validation_retries:
                 ctx.write_event_to_stream(
                     Event(
-                        msg=f"[{inspect.currentframe().f_code.co_name}] The slides are not fixed, retrying..."
+                        msg=WorkflowStreamingEvent(
+                            event_type="server_message",
+                            event_sender=inspect.currentframe().f_code.co_name,
+                            event_content={
+                                "message": "The slides are not fixed, retrying..."
+                            },
+                        ).json()
+                        # msg=f"[{inspect.currentframe().f_code.co_name}] The slides are not fixed, retrying..."
                     )
                 )
                 return SlideValidationEvent(result=response)
             else:
                 ctx.write_event_to_stream(
                     Event(
-                        msg=f"[{inspect.currentframe().f_code.co_name}] "
-                            f"The slides are not fixed after {self.max_validation_retries} retries!"
+                        msg=WorkflowStreamingEvent(
+                            event_type="server_message",
+                            event_sender=inspect.currentframe().f_code.co_name,
+                            event_content={
+                                "message": f"The slides are not fixed after {self.max_validation_retries} retries!"
+                            },
+                        ).json()
+                        # msg=f"[{inspect.currentframe().f_code.co_name}] "
+                        #     f"The slides are not fixed after {self.max_validation_retries} retries!"
                     )
                 )
                 return StopEvent(
@@ -462,7 +532,14 @@ class SlideGenerationWorkflow(Workflow):
         # agent make changes to the slides and save slide
         ctx.write_event_to_stream(
             Event(
-                msg=f"[{inspect.currentframe().f_code.co_name}] Modifying the slides based on the feedback..."
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=inspect.currentframe().f_code.co_name,
+                    event_content={
+                        "message": "Modifying the slides based on the feedback..."
+                    },
+                ).json()
+                # msg=f"[{inspect.currentframe().f_code.co_name}] Modifying the slides based on the feedback..."
             )
         )
 

@@ -26,7 +26,11 @@ class Settings(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: int
 
-    WORKFLOW_ARTIFACTS_PATH: str
+    # path and file name configuration
+    WORKFLOW_ARTIFACTS_PATH: str = "./workflow_artifacts"
+    SLIDE_TEMPLATE_PATH: str = "./data/Inmeta 2023 template.pptx"
+    SLIDE_OUTLINE_FNAME: str = "slide_outlines.json"
+    FINAL_SLIDE_FNAME: str = "paper_summaries.pptx"
 
     MLFLOW_TRACKING_URI: str
 

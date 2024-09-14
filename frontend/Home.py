@@ -12,12 +12,12 @@ def main_page():
     # # add_logo()
     # st.logo("logo.png")
 
-    main_page = st.Page("pages/main_page.py", title="🏠 Home")
+    # main_page = st.Page("pages/main_page.py", title="🏠 Home")
     slide_gen_page = st.Page(
         "pages/slide_generation_page.py", title="🧾 Slide Generation"
     )
     # chat_page = st.Page("app_pages/chat.py", title="💬 Chat")
-    pg = st.navigation([main_page, slide_gen_page])
+    pg = st.navigation([slide_gen_page])
 
     pg.run()
 

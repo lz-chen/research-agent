@@ -1,4 +1,6 @@
 import json
+import logging
+
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import httpx
@@ -38,30 +40,44 @@ async def fetch_streaming_data(url: str, payload: dict = None):
                     yield line
 
 
+def format_workflow_info(info_json: dict):
+    # event_type = info_json.get("event_type")
+    event_sender = info_json.get("event_sender")
+    event_content = info_json.get("event_content")
+
+    try:
+        return f"[{event_sender}]: {event_content.get('message')}"
+    except Exception as e:
+        logging.warning(f"Error formatting workflow info: {str(e)}")
+        return json.dumps(info_json)
+
+
 async def get_stream_data(url, payload, message_queue, user_input_event):
     message_queue.put(('message', 'Starting to fetch streaming data...'))
-    async for line in fetch_streaming_data(url, payload):
-        if line:
+    async for data in fetch_streaming_data(url, payload):
+        if data:
             try:
-                message = json.loads(line)
-                if "workflow_id" in message:
+                data_json = json.loads(data)
+                if "workflow_id" in data_json:
                     # Send workflow_id to main thread
-                    message_queue.put(('workflow_id', message["workflow_id"]))
+                    message_queue.put(('workflow_id', data_json["workflow_id"]))
                     continue
-                event_type = message.get("event")
-                if event_type in ["request_user_input", "request_feedback"]:
+                event_type = data_json.get("event_type")
+                event_sender = data_json.get("event_sender")
+                event_content = data_json.get("event_content")
+                if event_type in ["request_user_input"]:
                     # Send the message to the main thread
-                    message_queue.put(('user_input_required', message))
+                    message_queue.put(('user_input_required', data_json))
                     # Wait until user input is provided
                     user_input_event.wait()
                     user_input_event.clear()
                     continue
                 else:
                     # Send the line to the main thread
-                    message_queue.put(('message', message.get('msg', line)))
-            except json.JSONDecodeError:
-                message_queue.put(('message', line))
-        if "[Final result]:" in str(line):
+                    message_queue.put(('message', format_workflow_info(data_json)))
+            except json.JSONDecodeError:  # todo: is this necessary?
+                message_queue.put(('message', data))
+        if "[Final result]:" in str(data):
             break  # Stop processing after receiving the final result
 
 
@@ -92,49 +108,46 @@ def process_messages():
             pass
 
 
+@st.fragment
 def user_input_fragment():
     if st.session_state.user_input_required:
-        message = st.session_state.user_input_prompt
-        event_type = message.get("event")
+        data = st.session_state.user_input_prompt
+        event_type = data.get("event_type")
         st.write(f"Event received: {event_type}")  # Logging
         if event_type == "request_user_input":
-            summary = message.get("summary")
-            outline = message.get("outline")
+            summary = data.get("event_content").get("summary")
+            outline = data.get("event_content").get("outline")
+            prompt_message = data.get("event_content").get("message", "Please review the outline.")
+
             st.write("Summary:")
-            st.write(summary)
+            st.markdown(summary)
             st.write("Outline:")
             st.json(outline)
-            user_response = st.radio(
-                "Do you approve this outline?",
-                ("Yes", "No"),
-                key="user_response",
+            st.write(prompt_message)
+
+            sentiment_mapping = [":material/thumb_down:", ":material/thumb_up:"]
+            approval = st.feedback("thumbs")
+            # Display feedback input (optional)
+            feedback = st.text_area(
+                "Please provide feedback if you have any:",
+                key="user_feedback"
             )
+
             if st.button("Submit Response", key="submit_response"):
-                st.write(f"Submitting response: {user_response}")  # Logging
+                st.write(f"Submitting approval: {approval}, feedback: {feedback}")  # Logging
+                user_response = {
+                    "approval": sentiment_mapping[approval],
+                    "feedback": feedback
+                }
                 # Send the user's response to the backend
-                requests.post(
+                response = requests.post(
                     "http://backend:80/submit_user_input",
                     json={
                         "workflow_id": st.session_state.workflow_id,
-                        "user_input": user_response,
+                        "user_input": json.dumps(user_response),
                     },
                 )
-                st.session_state.user_input_required = False
-                st.session_state.user_input_prompt = None
-                # Signal the background thread
-                st.session_state.user_input_event.set()
-        elif event_type == "request_feedback":
-            st.write("Please provide your feedback below:")  # Logging
-            feedback = st.text_area(message.get("message"), key="user_feedback")
-            if st.button("Submit Feedback", key="submit_feedback"):
-                st.write(f"Submitting feedback: {feedback}")  # Logging
-                requests.post(
-                    "http://backend:80/submit_user_input",
-                    json={
-                        "workflow_id": st.session_state.workflow_id,
-                        "user_input": feedback,
-                    },
-                )
+                st.write(f"Backend response: {response.status_code}")  # Logging
                 st.session_state.user_input_required = False
                 st.session_state.user_input_prompt = None
                 # Signal the background thread
@@ -142,7 +155,13 @@ def user_input_fragment():
 
 
 def main():
-    st.title("Slide Generation")
+    st.set_page_config(
+        page_title="Slide Generation",
+        page_icon="🧾",
+        layout="wide",
+        # initial_sidebar_state="expanded",  # expand side bar (horizontally)
+    )
+    # st.title("Slide Generation")
 
     # Use st_autorefresh to refresh the script every 2 seconds
     st_autorefresh(interval=2000, limit=None, key="data_refresh")
@@ -157,7 +176,16 @@ def main():
             )
             submit_button = st.form_submit_button(label="Submit")
 
-    expander_placeholder = st.expander("🤖⚒️Agent is working...")
+    # Main view divided into two columns
+    left_column, right_column = st.columns(2)
+
+    with left_column:
+        st.write("Workflow Executions:")
+        expander_placeholder = st.expander("🤖⚒️Agent is working...")
+
+    with right_column:
+        st.write("Workflow Artifacts:")
+        artifact_render = st.empty()
 
     if submit_button:
         # Start the long-running task in a separate thread
@@ -193,7 +221,8 @@ def main():
             st.write(line)
 
     # Include the user input fragment
-    user_input_fragment()
+    with artifact_render:
+        user_input_fragment()
 
 
 main()
