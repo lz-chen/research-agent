@@ -28,6 +28,11 @@ class Settings(BaseSettings):
 
     # path and file name configuration
     WORKFLOW_ARTIFACTS_PATH: str = "./workflow_artifacts"
+
+    PAPERS_DOWNLOAD_PATH: str = "data/papers"
+    PAPERS_IMAGES_PATH: str = "data/papers_images"
+    PAPER_SUMMARY_PATH: str = "data/paper_summaries"
+
     SLIDE_TEMPLATE_PATH: str = "./data/Inmeta 2023 template.pptx"
     SLIDE_OUTLINE_FNAME: str = "slide_outlines.json"
     FINAL_SLIDE_FNAME: str = "paper_summaries.pptx"

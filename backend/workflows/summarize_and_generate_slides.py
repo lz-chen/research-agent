@@ -6,15 +6,7 @@ from llama_index.core import Settings
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
-import sys
 
-if not logging.getLogger().hasHandlers():
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -28,6 +20,16 @@ from workflows.events import *
 
 from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 Settings.llm = llm_gpt4o
 Settings.embed_model = aoai_embedder
@@ -44,7 +46,7 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         self.loop = asyncio.get_running_loop()  # Store the event loop
         return await super().run(*args, **kwargs)
 
-    async def reset_user_input_future(self):
+    def reset_user_input_future(self):
         self.user_input_future = self.loop.create_future()
 
     async def run_subworkflow(self, sub_wf, ctx, **kwargs):
@@ -61,7 +63,7 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
 
     @step
     async def summary_gen(
-            self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
+        self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
     ) -> SummaryWfReadyEvent:
         # res = await summary_gen_wf.run(user_query=ev.user_query)
         res = await self.run_subworkflow(summary_gen_wf, ctx, user_query=ev.user_query)
@@ -70,7 +72,10 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
 
     @step
     async def slide_gen(
-            self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenerationWorkflow
+        self,
+        ctx: Context,
+        ev: SummaryWfReadyEvent,
+        slide_gen_wf: SlideGenerationWorkflow,
     ) -> StopEvent:
         # res = await slide_gen_wf.run(file_dir=ev.summary_dir)
         res = await self.run_subworkflow(slide_gen_wf, ctx, file_dir=ev.summary_dir)

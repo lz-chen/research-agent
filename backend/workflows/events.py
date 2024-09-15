@@ -24,10 +24,6 @@ class FilteredPapersEvent(Event):
     paper: Paper
 
 
-# class DownloadPaperEvent(Event):
-#     papers_dict: dict
-
-
 class Paper2SummaryDispatcherEvent(Event):
     papers_path: str
 
@@ -86,3 +82,7 @@ class SlideGeneratedEvent(Event):
 
 class SlideValidationEvent(Event):
     result: SlideValidationResult
+
+
+class DummyEvent(Event):
+    result: str

@@ -41,10 +41,10 @@ services:
 #      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
 #      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/mlflow/mlruns"
     command: >
-      mlflow ui --port 8080 
+      mlflow server --port 5000
       --backend-store-uri sqlite:///mlruns.db 
       --default-artifact-root ./mlruns
-      --host 127.0.0.1
+      --host 0.0.0.0
 
 networks:
   app-network:
