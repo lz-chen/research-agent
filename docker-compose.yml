@@ -10,11 +10,15 @@ services:
       - "8000:80"
     networks:
       - app-network
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
     volumes:
       - .env:/app/.env
       - ./data:/app/data
       - ./workflow_artifacts:/app/workflow_artifacts
       - ~/.azure:/root/.azure
+      - ./mlruns:/app/mlruns:rw
+      - ./mlartifacts:/app/mlartifacts:rw
 
   frontend:
     build:
@@ -34,17 +38,18 @@ services:
     networks:
       - app-network
     volumes:
-      - ./mlruns:/mlflow/mlruns
-      - ./.env:/app/.env
-#    environment:
-#      MLFLOW_TRACKING_URI: "http://0.0.0.0:5000"
-#      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
+      - ./mlruns:/mlruns:rw
+      - ./mlartifacts:/mlartifacts:rw
+#      - ./.env:/app/.env
+    environment:
+      MLFLOW_LOGGING_LEVEL: "DEBUG"
+#      MLFLOW_TRACKING_URI: "http://mlflow:8080"
+#      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow/mlruns/mlruns.db"
 #      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/mlflow/mlruns"
     command: >
-      mlflow server --port 5000
-      --backend-store-uri sqlite:///mlruns.db 
-      --default-artifact-root ./mlruns
-      --host 0.0.0.0
+      mlflow server --host 0.0.0.0 --port 8080
+      --backend-store-uri sqlite:///mlruns/mlruns.db
+#      --default-artifact-root file:///mlruns
 
 networks:
   app-network:
