@@ -187,7 +187,7 @@ Requirement:
 - Use layout and text box index according to what is given in each of the slide content item 
 - Vary the content layout of the slides to make the presentation engaging
 - Generate the python code before you try to execute it
-- Save the final slide pptx file with name `{final_slide_fname}`
+- Save the final slide pptx file with name `{generated_slide_fname}`
 
 """
 # - For each key heading in the paper summary, create a different text box in the slide

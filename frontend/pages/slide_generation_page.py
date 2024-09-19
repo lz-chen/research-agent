@@ -71,6 +71,10 @@ async def get_stream_data(url, payload, message_queue, user_input_event):
                     # Send workflow_id to main thread
                     message_queue.put(("workflow_id", data_json["workflow_id"]))
                     continue
+                elif "final_result" in data_json:
+                    # Send final_result to main thread
+                    message_queue.put(("final_result", data_json["final_result"]))
+                    continue
                 event_type = data_json.get("event_type")
                 event_sender = data_json.get("event_sender")
                 event_content = data_json.get("event_content")
@@ -116,6 +120,9 @@ def process_messages():
                 )
             elif msg_type == "message":
                 st.session_state.received_lines.append(content)
+            elif msg_type == "final_result":
+                st.session_state.final_result = content
+                st.session_state.download_url = content.get("download_url")
             elif msg_type == "error":
                 st.error(content)
         except queue.Empty:
@@ -267,6 +274,22 @@ def main():
 
     # Include the user input fragment
     user_input_fragment(artifact_render)
+
+    # Render the download button if download_url is available
+    if "download_url" in st.session_state and st.session_state.download_url:
+        download_url = st.session_state.download_url
+        try:
+            response = requests.get(download_url)
+            response.raise_for_status()
+            pptx_data = response.content
+            st.download_button(
+                label="Download Generated PPTX",
+                data=pptx_data,
+                file_name="generated_slides.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        except Exception as e:
+            st.error(f"Failed to download the PPTX file: {str(e)}")
 
 
 main()

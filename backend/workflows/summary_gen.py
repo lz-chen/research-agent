@@ -1,7 +1,9 @@
 import asyncio
 import inspect
+import os
 import random
 import string
+import uuid
 
 import click
 import mlflow
@@ -51,18 +53,21 @@ Settings.embed_model = aoai_embedder
 
 
 class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
+    wid: Optional[uuid.UUID] = uuid.uuid4()
     tavily_max_results: int = 2
-    n_max_final_papers: int = 10
+    n_max_final_papers: int = 5
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         # self.parent_workflow = None
-
+        self.wid = wid
         super().__init__(*args, **kwargs)
         # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
         class_name = self.__class__.__name__
-        s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        # s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
         self.workflow_artifacts_path = (
-            Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath(class_name).joinpath(s)
+            Path(settings.WORKFLOW_ARTIFACTS_PATH)
+            .joinpath(class_name)
+            .joinpath(str(self.wid))
         )
         self.papers_download_path = self.workflow_artifacts_path.joinpath(
             settings.PAPERS_DOWNLOAD_PATH
@@ -76,19 +81,6 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             settings.PAPERS_IMAGES_PATH
         )
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
-
-    # async def run(self, *args, **kwargs):
-    #     self.loop = asyncio.get_running_loop()  # Store the event loop
-    #     result = await super().run(*args, **kwargs)
-    #     return result
-
-    # self.loop = asyncio.get_running_loop()  # Store the event loop
-    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    # mlflow.set_experiment("SummaryGenerationWorkflow")
-    # mlflow.llama_index.autolog()
-    # mlflow.start_run()
-    # result = await super().run(*args, **kwargs)
-    # mlflow.end_run()
 
     @step(pass_context=True)
     async def tavily_query(self, ctx: Context, ev: StartEvent) -> TavilyResultsEvent:
@@ -138,7 +130,9 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     @step(pass_context=True, num_workers=4)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
         llm = new_gpt4o_mini(temperature=0.0)
-        _, response = await process_citation(0, ctx.data["research_topic"], ev.paper, llm)
+        _, response = await process_citation(
+            0, ctx.data["research_topic"], ev.paper, llm
+        )
         return FilteredPaperEvent(paper=ev.paper, is_relevant=response)
 
     @step(pass_context=True)
@@ -229,19 +223,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
 # workflow for debugging purpose
 class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
-    # async def run(self, *args, **kwargs):
-    #     self.loop = asyncio.get_running_loop()  # Store the event loop
-    #     result = await super().run(*args, **kwargs)
-    #     return result
-
-    # self.loop = asyncio.get_running_loop()  # Store the event loop
-    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    # mlflow.set_experiment("SummaryGenerationDummyWorkflow")
-    # mlflow.llama_index.autolog()
-    # mlflow.start_run()
-    # result = await super().run(*args, **kwargs)
-    # mlflow.end_run()
-    # return result
+    wid: Optional[uuid.UUID] = uuid.uuid4()
 
     @step
     async def dummy_start_step(self, ev: StartEvent) -> DummyEvent:
@@ -275,6 +257,7 @@ def main(user_query: str):
 
 
 if __name__ == "__main__":
+    # os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "/mlruns"
     draw_all_possible_flows(
         SummaryGenerationWorkflow, filename="summary_gen_flows.html"
     )

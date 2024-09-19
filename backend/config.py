@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     SLIDE_TEMPLATE_PATH: str = "./data/Inmeta 2023 template.pptx"
     SLIDE_OUTLINE_FNAME: str = "slide_outlines.json"
-    FINAL_SLIDE_FNAME: str = "paper_summaries.pptx"
+    GENERATED_SLIDE_FNAME: str = "paper_summaries.pptx"
 
     MLFLOW_TRACKING_URI: str
 

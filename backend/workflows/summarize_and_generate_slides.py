@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import click
 from llama_index.core import Settings
@@ -37,9 +38,10 @@ Settings.embed_model = aoai_embedder
 
 class SummaryAndSlideGenerationWorkflow(Workflow):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Initialize user input future
+        self.wid = wid
         self.user_input_future = asyncio.Future()
 
     async def run(self, *args, **kwargs):

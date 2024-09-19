@@ -1,3 +1,5 @@
+import sys
+
 from fastapi import FastAPI, HTTPException, Body
 import asyncio
 from fastapi.responses import StreamingResponse
@@ -11,8 +13,15 @@ from workflows.summary_gen import (
     SummaryGenerationWorkflow,
     SummaryGenerationDummyWorkflow,
 )
+from fastapi.middleware.cors import CORSMiddleware
+
 import mlflow
 from config import settings
+import os
+from fastapi.responses import FileResponse
+from pathlib import Path
+
+os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "/mlruns"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -29,18 +38,33 @@ app = FastAPI()
 workflows = {}  # Store the workflow instances in a dictionary
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://frontend:8501"],  # Replace with your Streamlit frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.post("/run-slide-gen")
 async def run_workflow_endpoint(topic: ResearchTopic):
     workflow_id = str(uuid.uuid4())
 
-    wf = SummaryAndSlideGenerationWorkflow(timeout=2000, verbose=True)
+    wf = SummaryAndSlideGenerationWorkflow(wid=workflow_id, timeout=2000, verbose=True)
+    wf.add_workflows(
+        summary_gen_wf=SummaryGenerationWorkflow(
+            wid=workflow_id, timeout=800, verbose=True
+        )
+    )
     # wf.add_workflows(
-    #     summary_gen_wf=SummaryGenerationWorkflow(timeout=800, verbose=True)
+    #     summary_gen_wf=SummaryGenerationDummyWorkflow(wid=workflow_id,timeout=800, verbose=True)
     # )
     wf.add_workflows(
-        summary_gen_wf=SummaryGenerationDummyWorkflow(timeout=800, verbose=True)
+        slide_gen_wf=SlideGenerationWorkflow(
+            wid=workflow_id, timeout=1200, verbose=True
+        )
     )
-    wf.add_workflows(slide_gen_wf=SlideGenerationWorkflow(timeout=1200, verbose=True))
 
     # wf = SlideGenerationWorkflow(timeout=1200, verbose=True)
 
@@ -51,11 +75,13 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         logger.debug(f"event_generator: loop id {id(loop)}")
         yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
 
-        mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-        mlflow.set_experiment("SlideGenerationWorkflow")
-        mlflow.llama_index.autolog()
-        mlflow.start_run()
-        logger.debug("run_workflow_endpoint: mlflow.start_run()")
+        # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+        # mlflow.set_experiment("SummaryAndSlideGenerationWorkflow")
+        # mlflow.llama_index.autolog()
+        # mlflow.config.enable_async_logging()
+        # mlflow.tracing.enable()
+        # mlflow.start_run()
+        # logger.debug("run_workflow_endpoint: mlflow.start_run()")
 
         task = asyncio.create_task(wf.run(user_query=topic.query))
         logger.debug(f"event_generator: Created task {task}")
@@ -65,15 +91,22 @@ async def run_workflow_endpoint(topic: ResearchTopic):
                 yield f"{ev.msg}\n\n"
                 await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
             final_result = await task
-            # yield f"[Final result]: {final_result}\n\n"
-            yield f"{json.dumps({'final_result': final_result})}\n\n"
+
+            # Construct the download URL
+            download_url = f"http://backend:80/download/{workflow_id}"
+            final_result_with_url = {
+                "result": final_result,
+                "download_url": download_url,
+            }
+
+            yield f"{json.dumps({'final_result': final_result_with_url})}\n\n"
         except Exception as e:
             error_message = f"Error in workflow: {str(e)}"
             logger.error(error_message)
             yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
         finally:
-            mlflow.end_run()
-            logger.debug("run_workflow_endpoint: mlflow.end_run()")
+            # mlflow.end_run()
+            # logger.debug("run_workflow_endpoint: mlflow.end_run()")
             # Clean up
             workflows.pop(workflow_id, None)
 
@@ -98,6 +131,25 @@ async def submit_user_input(data: dict = Body(...)):
         raise HTTPException(
             status_code=404, detail="Workflow not found or future not initialized"
         )
+
+
+@app.get("/download/{workflow_id}")
+async def download_pptx(workflow_id: str):
+    # Adjust the path according to your directory structure
+    file_path = (
+        Path(settings.WORKFLOW_ARTIFACTS_PATH)
+        / "SlideGenerationWorkflow"
+        / workflow_id
+        / "final.pptx"
+    )
+    if file_path.exists():
+        return FileResponse(
+            path=file_path,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            filename=f"final.pptx",
+        )
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
 
 
 @app.get("/")

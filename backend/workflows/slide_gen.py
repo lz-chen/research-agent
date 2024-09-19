@@ -1,7 +1,9 @@
 import asyncio
 import json
 import random
+import shutil
 import string
+import uuid
 
 import click
 
@@ -82,41 +84,21 @@ def read_summary_content(file_path: Path):
 
 
 class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
-    max_validation_retries: int = 5
+    wid: Optional[uuid.UUID] = uuid.uuid4()
+    max_validation_retries: int = 2
     slide_template_path: str = settings.SLIDE_TEMPLATE_PATH
-    final_slide_fname: str = settings.FINAL_SLIDE_FNAME
+    generated_slide_fname: str = settings.GENERATED_SLIDE_FNAME
     slide_outlines_fname: str = settings.SLIDE_OUTLINE_FNAME
 
-    # async def run(self, *args, **kwargs):
-    #     self.loop = asyncio.get_running_loop()  # Store the event loop
-    #     result = await super().run(*args, **kwargs)
-    #     return result
-
-    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    # mlflow.set_experiment("SlideGenerationWorkflow")
-    # mlflow.llama_index.autolog()
-    # mlflow.start_run()
-    # try:
-    #     logger.debug("SlideGenerationWorkflow.run: starting mlflow logging")
-    #     result = await super().run(*args, **kwargs)
-    #     logger.debug("SlideGenerationWorkflow.run: finished super().run()")
-    #     return result
-    # except Exception as e:
-    #     logger.debug("SlideGenerationWorkflow.run: Error in workflow: {e}")
-    #     logging.error(f"Error in workflow: {e}")
-    #     raise
-    # finally:
-    #     logger.debug("SlideGenerationWorkflow.run: mlflow.end_run()")
-    #     mlflow.end_run()
-    # return result
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
+        self.wid = wid
         class_name = self.__class__.__name__
-        s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        # s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
         self.workflow_artifacts_path = (
-            Path(settings.WORKFLOW_ARTIFACTS_PATH).joinpath(class_name).joinpath(s)
+            Path(settings.WORKFLOW_ARTIFACTS_PATH)
+            .joinpath(class_name)
+            .joinpath(str(self.wid))
         )
         self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
@@ -137,6 +119,47 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self.user_input_future = asyncio.Future()
         self.user_input = None
 
+    def copy_final_slide(self):
+        """
+        Go through all the pptx files in self.workflow_artifacts_path, find the final file
+        and copy it to settings.WORKFLOW_ARTIFACTS_PATH as final.pptx.
+        """
+        pptx_files = list(
+            self.workflow_artifacts_path.glob(
+                f"{Path(self.generated_slide_fname).stem}*.pptx"
+            )
+        )
+        if not pptx_files:
+            raise FileNotFoundError(
+                "No pptx files found in the workflow artifacts path."
+            )
+
+        # Find the file with the largest version number
+        final_file = None
+        max_version = -1
+        for file in pptx_files:
+            if file.stem == "paper_summaries":
+                final_file = file
+                break
+            else:
+                try:
+                    version = int(file.stem.split("_v")[-1])
+                    if version > max_version:
+                        max_version = version
+                        final_file = file
+                except ValueError:
+                    continue
+
+        if not final_file:
+            raise FileNotFoundError(
+                "No valid pptx files found in the workflow artifacts path."
+            )
+
+        # Copy the final file to the destination
+        destination = self.workflow_artifacts_path / "final.pptx"
+        shutil.copy(final_file, destination)
+        logger.info(f"Copied final slide to {destination}")
+
     def get_all_layout(self):
         """Get all layout information"""
         return self.all_layout
@@ -146,7 +169,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         remote_files = self.azure_code_interpreter.list_files()
         local_files = []
         for f in remote_files:
-            logging.info(f"Downloading remote file: {f.file_full_path}")
+            logger.info(f"Downloading remote file: {f.file_full_path}")
             local_path = f"{self.workflow_artifacts_path.as_posix()}/{f.filename}"
             self.azure_code_interpreter.download_file_to_local(
                 remote_file_path=f.file_full_path,
@@ -317,27 +340,27 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         # Initialize the future if it's None
         if self.user_input_future is None:
-            logging.info(
+            logger.info(
                 "self.user_input_future is None, initializing user input future"
             )
             self.user_input_future = self.loop.create_future()
 
         # Wait for user input
         if not self.user_input_future.done():
-            logging.info(f"gather_feedback_outline: Event loop id {id(self.loop)}")
-            logging.info("gather_feedback_outline: Waiting for user input")
+            logger.info(f"gather_feedback_outline: Event loop id {id(self.loop)}")
+            logger.info("gather_feedback_outline: Waiting for user input")
             user_response = await self.user_input_future
-            logging.info(f"gather_feedback_outline: Got user response: {user_response}")
+            logger.info(f"gather_feedback_outline: Got user response: {user_response}")
 
             # Reset the input future
             if self.parent_workflow:
-                logging.info(
+                logger.info(
                     "Resetting user input future by self.parent_workflow.reset_user_input_future()"
                 )
                 await self.parent_workflow.reset_user_input_future()
                 self.user_input_future = self.parent_workflow.user_input_future
             else:
-                logging.info("Resetting user input future by self.loop.create_future()")
+                logger.info("Resetting user input future by self.loop.create_future()")
                 self.user_input_future = self.loop.create_future()
 
             # Process user_response, which should be a JSON string
@@ -347,7 +370,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 feedback = response_data.get("feedback", "").strip()
             except json.JSONDecodeError:
                 # Handle invalid JSON
-                logging.error("Invalid user response format")
+                logger.error("Invalid user response format")
                 raise Exception("Invalid user response format")
 
             if approval == ":material/thumb_up:":
@@ -357,7 +380,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     summary=ev.summary, outline=ev.outline, feedback=feedback
                 )
         else:
-            logging.info("User input future is already done, skipping await.")
+            logger.info("User input future is already done, skipping await.")
 
     @step(pass_context=True)
     async def outlines_with_layout(
@@ -449,7 +472,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             SLIDE_GEN_PMT.format(
                 json_file_path=ev.outlines_fpath.as_posix(),
                 template_fpath=self.slide_template_path,
-                final_slide_fname=self.final_slide_fname,
+                generated_slide_fname=self.generated_slide_fname,
             )
             + REACT_PROMPT_SUFFIX
         )
@@ -458,7 +481,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         res = self.azure_code_interpreter.upload_file(
             local_file_path=self.slide_template_path
         )
-        logging.info(f"Uploaded file to Azure: {res}")
+        logger.info(f"Uploaded file to Azure: {res}")
 
         # use `agent.create_task` to get the stepwise execution result,
         # end result is equal to `agent.chat`
@@ -480,7 +503,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             )
         )
         return SlideGeneratedEvent(
-            pptx_fpath=f"{self.workflow_artifacts_path}/{self.final_slide_fname}"
+            pptx_fpath=f"{self.workflow_artifacts_path}/{self.generated_slide_fname}"
         )
 
     @step(pass_context=True, num_workers=4)
@@ -490,14 +513,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         """Validate the generated slide deck"""
         ctx.data["n_retry"] += 1
         ctx.data["latest_pptx_file"] = Path(ev.pptx_fpath).name
-        logging.info(f"[validate_slides] the retry count is: {ctx.data['n_retry']}")
-        logging.info(
+        logger.info(f"[validate_slides] the retry count is: {ctx.data['n_retry']}")
+        logger.info(
             f"[validate_slides] Validating the generated slide deck"
             f" {Path(ev.pptx_fpath).name} | {ctx.data['latest_pptx_file']}..."
         )
         # slide to images
         img_dir = pptx2images(Path(ev.pptx_fpath))
-        logging.info(f"[validate_slides] Storing pptx as images in" f" {img_dir}...")
+        logger.info(f"[validate_slides] Storing pptx as images in" f" {img_dir}...")
         # upload image w. prompt for validation to llm and get structured response
         image_documents = SimpleDirectoryReader(img_dir).load_data()
 
@@ -548,8 +571,9 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     ).json()
                 )
             )
+            self.copy_final_slide()
             return StopEvent(
-                self.workflow_artifacts_path.joinpath(self.final_slide_fname)
+                self.workflow_artifacts_path.joinpath(self.generated_slide_fname)
             )
         else:
             if ctx.data["n_retry"] < self.max_validation_retries:
@@ -577,6 +601,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                         ).json()
                     )
                 )
+                self.copy_final_slide()
                 return StopEvent(
                     f"The slides are not fixed after {self.max_validation_retries} retries!"
                 )
@@ -603,13 +628,13 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
 
         slide_pptx_path = f"/mnt/data/{ctx.data['latest_pptx_file']}"
-        logging.info(f"[modify_slides] slide_pptx_path: {slide_pptx_path}")
+        logger.info(f"[modify_slides] slide_pptx_path: {slide_pptx_path}")
         remote_files = self.azure_code_interpreter.list_files()
         for f in remote_files:
-            if f.filename == self.final_slide_fname:
+            if f.filename == self.generated_slide_fname:
                 slide_pptx_path = f.file_full_path
         modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{ctx.data['n_retry']}.pptx"
-        logging.info(f"[modify_slides] modified_pptx_path: {modified_pptx_path}")
+        logger.info(f"[modify_slides] modified_pptx_path: {modified_pptx_path}")
 
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
