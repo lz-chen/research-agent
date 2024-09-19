@@ -156,7 +156,7 @@ def get_paper_with_citations(query: str, limit: int = 1) -> List[Paper]:
     return citations
 
 
-async def process_citation(i, citation, llm):
+async def process_citation(i, research_topic, citation, llm):
     program = FunctionCallingProgram.from_defaults(
         llm=llm,
         output_cls=IsCitationRelevant,
@@ -164,6 +164,7 @@ async def process_citation(i, citation, llm):
         verbose=True,
     )
     response = await program.acall(
+        research_topic=research_topic,
         title=citation.title,
         abstract=citation.summary,
         description="Data model for whether the paper is relevant to the research topic.",
@@ -171,7 +172,9 @@ async def process_citation(i, citation, llm):
     return i, response
 
 
-async def filter_relevant_citations(citations: List[Paper]) -> Dict[str, Any]:
+async def filter_relevant_citations(
+    research_topic: str, citations: List[Paper]
+) -> Dict[str, Any]:
     """
     Filter relevant citations based on research topic.
     :param citations: list of papers to filter
@@ -179,7 +182,10 @@ async def filter_relevant_citations(citations: List[Paper]) -> Dict[str, Any]:
     :return:
     """
     llm = llms.new_gpt4o_mini(temperature=0.0)
-    tasks = [process_citation(i, citation, llm) for i, citation in enumerate(citations)]
+    tasks = [
+        process_citation(i, research_topic, citation, llm)
+        for i, citation in enumerate(citations)
+    ]
     results = await asyncio.gather(*tasks)
 
     # Match results to their corresponding index
@@ -322,14 +328,19 @@ def parse_paper_pdfs(papers_dir: Path, force_reparse=False):
 
 @click.command()
 @click.argument(
+    "research_topic", type=str, default="Automatic Presentation Slides Generation"
+)
+@click.argument(
     "entry_paper_title",
     type=str,
     default="DOC2PPT: Automatic Presentation Slides Generation from Scientific Documents",
 )
-def main(entry_paper_title):
+def main(research_topic, entry_paper_title):
     citations = get_paper_with_citations(entry_paper_title)
     if citations:
-        relevant_citations = asyncio.run(filter_relevant_citations(citations))
+        relevant_citations = asyncio.run(
+            filter_relevant_citations(research_topic, citations)
+        )
         paper_dir = download_relevant_citations(relevant_citations)
         parse_paper_pdfs(paper_dir)
     # pprint(relevant_citations)

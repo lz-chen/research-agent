@@ -92,6 +92,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
     @step(pass_context=True)
     async def tavily_query(self, ctx: Context, ev: StartEvent) -> TavilyResultsEvent:
+        ctx.data["research_topic"] = ev.user_query
         query = f"arxiv papers about the state of the art of {ev.user_query}"
         ctx.write_event_to_stream(
             Event(
@@ -134,10 +135,10 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             )
             self.send_event(PaperEvent(paper=paper))
 
-    @step(num_workers=4)
-    async def filter_papers(self, ev: PaperEvent) -> FilteredPaperEvent:
+    @step(pass_context=True, num_workers=4)
+    async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
         llm = new_gpt4o_mini(temperature=0.0)
-        _, response = await process_citation(0, ev.paper, llm)
+        _, response = await process_citation(0, ctx.data["research_topic"], ev.paper, llm)
         return FilteredPaperEvent(paper=ev.paper, is_relevant=response)
 
     @step(pass_context=True)
