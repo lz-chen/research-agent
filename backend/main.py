@@ -11,6 +11,8 @@ from workflows.summary_gen import (
     SummaryGenerationWorkflow,
     SummaryGenerationDummyWorkflow,
 )
+import mlflow
+from config import settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -48,6 +50,13 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         loop = asyncio.get_running_loop()
         logger.debug(f"event_generator: loop id {id(loop)}")
         yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
+
+        mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+        mlflow.set_experiment("SlideGenerationWorkflow")
+        mlflow.llama_index.autolog()
+        mlflow.start_run()
+        logger.debug("run_workflow_endpoint: mlflow.start_run()")
+
         task = asyncio.create_task(wf.run(user_query=topic.query))
         logger.debug(f"event_generator: Created task {task}")
         try:
@@ -63,6 +72,8 @@ async def run_workflow_endpoint(topic: ResearchTopic):
             logger.error(error_message)
             yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
         finally:
+            mlflow.end_run()
+            logger.debug("run_workflow_endpoint: mlflow.end_run()")
             # Clean up
             workflows.pop(workflow_id, None)
 

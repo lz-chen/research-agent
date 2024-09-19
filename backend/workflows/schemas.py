@@ -31,6 +31,11 @@ class SlideValidationResult(BaseModel):
     suggestion_to_fix: str
 
 
+class SlideNeedModifyResult(BaseModel):
+    slide_idx: int
+    suggestion_to_fix: str
+
+
 class TavilySearchResult(BaseModel):
     title: str
     url: str

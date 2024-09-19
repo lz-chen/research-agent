@@ -24,7 +24,14 @@ from prompts.prompts import (
     SLIDE_MODIFICATION_PMT,
     MODIFY_SUMMARY2OUTLINE_PMT,
 )
-from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
+from services.llms import (
+    llm_gpt4o,
+    new_gpt4o,
+    new_gpt4o_mini,
+    mm_gpt4o,
+    new_claude_sonnet,
+    new_mm_gpt4o,
+)
 from services.embeddings import aoai_embedder
 import logging
 import sys
@@ -48,6 +55,7 @@ from utils.file_processing import pptx2images
 from workflows.events import *
 import mlflow
 
+from workflows.hitl_workflow import HumanInTheLoopWorkflow
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -73,21 +81,34 @@ def read_summary_content(file_path: Path):
         return file.read()
 
 
-class SlideGenerationWorkflow(Workflow):
+class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     max_validation_retries: int = 5
     slide_template_path: str = settings.SLIDE_TEMPLATE_PATH
     final_slide_fname: str = settings.FINAL_SLIDE_FNAME
     slide_outlines_fname: str = settings.SLIDE_OUTLINE_FNAME
 
-    async def run(self, *args, **kwargs):
-        self.loop = asyncio.get_running_loop()  # Store the event loop
-        mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-        mlflow.set_experiment("SlideGenerationWorkflow")
-        mlflow.llama_index.autolog()
-        mlflow.start_run()
-        result = await super().run(*args, **kwargs)
-        mlflow.end_run()
-        return result
+    # async def run(self, *args, **kwargs):
+    #     self.loop = asyncio.get_running_loop()  # Store the event loop
+    #     result = await super().run(*args, **kwargs)
+    #     return result
+
+    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+    # mlflow.set_experiment("SlideGenerationWorkflow")
+    # mlflow.llama_index.autolog()
+    # mlflow.start_run()
+    # try:
+    #     logger.debug("SlideGenerationWorkflow.run: starting mlflow logging")
+    #     result = await super().run(*args, **kwargs)
+    #     logger.debug("SlideGenerationWorkflow.run: finished super().run()")
+    #     return result
+    # except Exception as e:
+    #     logger.debug("SlideGenerationWorkflow.run: Error in workflow: {e}")
+    #     logging.error(f"Error in workflow: {e}")
+    #     raise
+    # finally:
+    #     logger.debug("SlideGenerationWorkflow.run: mlflow.end_run()")
+    #     mlflow.end_run()
+    # return result
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -155,7 +176,7 @@ class SlideGenerationWorkflow(Workflow):
                 )
             )
 
-    def run_react_agent(self, agent, task, ctx):
+    async def run_react_agent(self, agent, task, ctx):
         step_output = agent.run_step(task.task_id)
         # self._agent_thought_to_stream(ctx, task)
         while not step_output.is_last:
@@ -175,7 +196,7 @@ class SlideGenerationWorkflow(Workflow):
         )
 
     @step(pass_context=True, num_workers=1)
-    def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
+    async def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
 
@@ -313,7 +334,7 @@ class SlideGenerationWorkflow(Workflow):
                 logging.info(
                     "Resetting user input future by self.parent_workflow.reset_user_input_future()"
                 )
-                self.parent_workflow.reset_user_input_future()
+                await self.parent_workflow.reset_user_input_future()
                 self.user_input_future = self.parent_workflow.user_input_future
             else:
                 logging.info("Resetting user input future by self.loop.create_future()")
@@ -445,7 +466,7 @@ class SlideGenerationWorkflow(Workflow):
             f"An example of outline item in json is {ev.outline_example.json()},"
             f" generate a slide deck"
         )
-        self.run_react_agent(agent, task, ctx)
+        await self.run_react_agent(agent, task, ctx)
         local_files = self.download_all_files_from_session()
         ctx.write_event_to_stream(
             Event(
@@ -462,7 +483,7 @@ class SlideGenerationWorkflow(Workflow):
             pptx_fpath=f"{self.workflow_artifacts_path}/{self.final_slide_fname}"
         )
 
-    @step(pass_context=True)
+    @step(pass_context=True, num_workers=4)
     async def validate_slides(
         self, ctx: Context, ev: SlideGeneratedEvent
     ) -> StopEvent | SlideValidationEvent:
@@ -476,7 +497,7 @@ class SlideGenerationWorkflow(Workflow):
         )
         # slide to images
         img_dir = pptx2images(Path(ev.pptx_fpath))
-
+        logging.info(f"[validate_slides] Storing pptx as images in" f" {img_dir}...")
         # upload image w. prompt for validation to llm and get structured response
         image_documents = SimpleDirectoryReader(img_dir).load_data()
 
@@ -491,18 +512,33 @@ class SlideGenerationWorkflow(Workflow):
                 ).json()
             )
         )
+        needs_modify = []
+        for img_doc in image_documents:
+            program = MultiModalLLMCompletionProgram.from_defaults(
+                output_parser=PydanticOutputParser(SlideValidationResult),
+                image_documents=[img_doc],
+                prompt_template_str=SLIDE_VALIDATION_PMT,
+                multi_modal_llm=new_mm_gpt4o(),
+                verbose=True,
+            )
+            response = program()
+            if response.is_valid:
+                continue
+            else:
+                page_idx = (
+                    img_doc.metadata.get("file_name", "")
+                    .rstrip(".png")
+                    .split("_")[-1]
+                    .split(".")[0]
+                )
+                needs_modify.append(
+                    SlideNeedModifyResult(
+                        slide_idx=int(page_idx),
+                        suggestion_to_fix=response.suggestion_to_fix,
+                    )
+                )
 
-        llm = mm_gpt4o
-        program = MultiModalLLMCompletionProgram.from_defaults(
-            output_parser=PydanticOutputParser(SlideValidationResult),
-            image_documents=image_documents,
-            prompt_template_str=SLIDE_VALIDATION_PMT,
-            multi_modal_llm=llm,
-            verbose=True,
-        )
-        response = program()
-
-        if response.is_valid:
+        if not needs_modify:
             ctx.write_event_to_stream(
                 Event(
                     msg=WorkflowStreamingEvent(
@@ -528,7 +564,7 @@ class SlideGenerationWorkflow(Workflow):
                         ).json()
                     )
                 )
-                return SlideValidationEvent(result=response)
+                return SlideValidationEvent(results=needs_modify)
             else:
                 ctx.write_event_to_stream(
                     Event(
@@ -589,10 +625,10 @@ class SlideGenerationWorkflow(Workflow):
         task = agent.create_task(
             f"The latest version of the slide deck can be found here: "
             f"`/mnt/data/{ctx.data['latest_pptx_file']}`.\n"
-            f"The feedback provided is as follows: '{ev.result.suggestion_to_fix}'\n"
-            f"Save the modified slide deck as `{modified_pptx_path}`."
+            f"The feedback provided is as follows: '{ev.json()}'\n"
+            f"Save the final modified slide deck as `{modified_pptx_path}`."
         )
-        self.run_react_agent(agent, task, ctx)
+        await self.run_react_agent(agent, task, ctx)
 
         self.download_all_files_from_session()
         return SlideGeneratedEvent(

@@ -46,20 +46,25 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         self.loop = asyncio.get_running_loop()  # Store the event loop
         return await super().run(*args, **kwargs)
 
-    def reset_user_input_future(self):
+    async def reset_user_input_future(self):
         self.user_input_future = self.loop.create_future()
 
     async def run_subworkflow(self, sub_wf, ctx, **kwargs):
+        logger.debug(f"Starting sub-workflow: {sub_wf.__class__.__name__}")
         sub_wf.user_input_future = self.user_input_future
         sub_wf.parent_workflow = self
-        # Start the sub-workflow
         sub_task = asyncio.create_task(sub_wf.run(**kwargs))
-        # While the sub-workflow is running, relay its events
-        async for event in sub_wf.stream_events():
-            ctx.write_event_to_stream(event)
-        # Wait for the sub-workflow to complete
-        result = await sub_task
-        return result
+        logger.debug(f"Created sub-workflow task: {sub_task}")
+        try:
+            async for event in sub_wf.stream_events():
+                logger.debug(f"Relaying event from sub-workflow: {event}")
+                ctx.write_event_to_stream(event)
+            result = await sub_task
+            logger.debug(f"Sub-workflow completed with result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in sub-workflow: {e}")
+            raise
 
     @step
     async def summary_gen(

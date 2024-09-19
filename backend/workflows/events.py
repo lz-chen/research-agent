@@ -81,7 +81,7 @@ class SlideGeneratedEvent(Event):
 
 
 class SlideValidationEvent(Event):
-    result: SlideValidationResult
+    results: List[SlideNeedModifyResult]
 
 
 class DummyEvent(Event):

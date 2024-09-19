@@ -19,6 +19,11 @@ RUN apt-get update && \
     mkdir -p /app/.config/libreoffice && \
     ln -sf /usr/lib/libreoffice/program/soffice /usr/bin/soffice
 
+# Install Git for mlflow
+RUN apt-get update && \
+    apt-get install -y git && \
+    rm -rf /var/lib/apt/lists/* \
+
 ENV PYTHONPATH=/usr/lib/libreoffice/program
 
 COPY pyproject.toml /app/

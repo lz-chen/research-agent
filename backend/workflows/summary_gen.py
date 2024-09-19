@@ -23,6 +23,7 @@ from llama_index.core.workflow import (
 
 from utils.file_processing import pdf2images
 from workflows.events import *
+from workflows.hitl_workflow import HumanInTheLoopWorkflow
 from workflows.paper_scraping import (
     get_paper_with_citations,
     process_citation,
@@ -49,7 +50,7 @@ Settings.llm = llm_gpt4o
 Settings.embed_model = aoai_embedder
 
 
-class SummaryGenerationWorkflow(Workflow):
+class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     tavily_max_results: int = 2
     n_max_final_papers: int = 10
 
@@ -76,15 +77,18 @@ class SummaryGenerationWorkflow(Workflow):
         )
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
 
-    async def run(self, *args, **kwargs):
-        self.loop = asyncio.get_running_loop()  # Store the event loop
-        mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-        mlflow.set_experiment("SummaryGenerationWorkflow")
-        mlflow.llama_index.autolog()
-        mlflow.start_run()
-        result = await super().run(*args, **kwargs)
-        mlflow.end_run()
-        return result
+    # async def run(self, *args, **kwargs):
+    #     self.loop = asyncio.get_running_loop()  # Store the event loop
+    #     result = await super().run(*args, **kwargs)
+    #     return result
+
+    # self.loop = asyncio.get_running_loop()  # Store the event loop
+    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+    # mlflow.set_experiment("SummaryGenerationWorkflow")
+    # mlflow.llama_index.autolog()
+    # mlflow.start_run()
+    # result = await super().run(*args, **kwargs)
+    # mlflow.end_run()
 
     @step(pass_context=True)
     async def tavily_query(self, ctx: Context, ev: StartEvent) -> TavilyResultsEvent:
@@ -223,7 +227,21 @@ class SummaryGenerationWorkflow(Workflow):
 
 
 # workflow for debugging purpose
-class SummaryGenerationDummyWorkflow(Workflow):
+class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
+    # async def run(self, *args, **kwargs):
+    #     self.loop = asyncio.get_running_loop()  # Store the event loop
+    #     result = await super().run(*args, **kwargs)
+    #     return result
+
+    # self.loop = asyncio.get_running_loop()  # Store the event loop
+    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+    # mlflow.set_experiment("SummaryGenerationDummyWorkflow")
+    # mlflow.llama_index.autolog()
+    # mlflow.start_run()
+    # result = await super().run(*args, **kwargs)
+    # mlflow.end_run()
+    # return result
+
     @step
     async def dummy_start_step(self, ev: StartEvent) -> DummyEvent:
         return DummyEvent(result="dummy")

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_MODEL: str
     MAX_TOKENS: int
 
+    ANTHROPIC_API_KEY: str
+    CLAUDE_MODEL_NAME: str
+
     AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT: str
 
     # vector store

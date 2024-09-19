@@ -27,7 +27,7 @@ def pdf2images(pdf_path: Path, output_folder: Path, dpi: int = 200) -> List[str]
         img_data = pix.tobytes("png")
 
         img = Image.open(io.BytesIO(img_data))
-        img_path = f"{output_folder}/page_{page_num + 1}.png"
+        img_path = f"{output_folder}/page_{page_num}.png"
         img.save(img_path)
         image_paths.append(img_path)
 
