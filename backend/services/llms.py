@@ -60,9 +60,9 @@ def new_gpt4o_mini(temperature=0.0):
     )
 
 
-def new_claude_sonnet(temperature=0.0):
-    return Anthropic(model=settings.CLAUDE_MODEL_NAME,
-                     api_key=settings.ANTHROPIC_API_KEY,
-                     temperature=temperature,
-                     max_tokens=8192,
-                     )
+# def new_claude_sonnet(temperature=0.0):
+#     return Anthropic(model=settings.CLAUDE_MODEL_NAME,
+#                      api_key=settings.ANTHROPIC_API_KEY,
+#                      temperature=temperature,
+#                      max_tokens=8192,
+#                      )
