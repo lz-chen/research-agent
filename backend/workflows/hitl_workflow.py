@@ -17,11 +17,6 @@ if not logger.hasHandlers():
 
 
 class HumanInTheLoopWorkflow(Workflow):
-    # async def run(self, *args, **kwargs):
-    #     self.loop = asyncio.get_running_loop()  # Store the event loop
-    #     result = await super().run(*args, **kwargs)
-    #     return result
-
     async def run(self, *args, **kwargs):
         self.loop = asyncio.get_running_loop()  # Store the event loop
         mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
@@ -52,16 +47,3 @@ class HumanInTheLoopWorkflow(Workflow):
             finally:
                 # mlflow.end_run()
                 logger.debug(f"{self.__class__.__name__}: MLflow run ended")
-
-    # async def run(self, *args, **kwargs):
-    #     self.loop = asyncio.get_running_loop()  # Store the event loop
-    #     result = await super().run(*args, **kwargs)
-    #     return result
-
-    # self.loop = asyncio.get_running_loop()  # Store the event loop
-    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    # mlflow.set_experiment("SummaryGenerationWorkflow")
-    # mlflow.llama_index.autolog()
-    # mlflow.start_run()
-    # result = await super().run(*args, **kwargs)
-    # mlflow.end_run()

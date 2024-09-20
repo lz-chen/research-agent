@@ -14,8 +14,10 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-
 # Initialize session state variables
+if "workflow_complete" not in st.session_state:
+    st.session_state.workflow_complete = False
+
 if "received_lines" not in st.session_state:
     st.session_state.received_lines = []
 
@@ -49,6 +51,9 @@ if "download_url_pdf" not in st.session_state:
 if "pdf_data" not in st.session_state:
     st.session_state.pdf_data = None
 
+if "expander_label" not in st.session_state:
+    st.session_state.expander_label = "🤖⚒️Agent is working..."
+
 
 async def fetch_streaming_data(url: str, payload: dict = None):
     async with httpx.AsyncClient(timeout=1200.0) as client:
@@ -71,7 +76,7 @@ def format_workflow_info(info_json: dict):
 
 
 async def get_stream_data(url, payload, message_queue, user_input_event):
-    message_queue.put(("message", "Starting to fetch streaming data..."))
+    # message_queue.put(("message", "Starting to fetch streaming data..."))
     data_json = None
     async for data in fetch_streaming_data(url, payload):
         if data:
@@ -130,10 +135,18 @@ def process_messages():
                 )
             elif msg_type == "message":
                 st.session_state.received_lines.append(content)
+                truncated_line = (
+                    "🤖⚒️ " + content[:75] + "..." if len(content) > 75 else content
+                )
+                st.session_state.expander_label = truncated_line
             elif msg_type == "final_result":
                 st.session_state.final_result = content
                 st.session_state.download_url_pptx = content.get("download_pptx_url")
                 st.session_state.download_url_pdf = content.get("download_pdf_url")
+                st.session_state.workflow_complete = (
+                    True  # Set the flag to stop auto-refresh
+                )
+
             elif msg_type == "error":
                 st.error(content)
         except queue.Empty:
@@ -221,9 +234,21 @@ def user_input_fragment(placeholder):
 
 
 def main():
+    # make expander scrollable
+    css = """
+    <style>
+        [data-testid="stExpander"] div:has(>.streamlit-expanderContent) {
+            overflow: scroll;
+            height: 800px;
+        }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
     st.title("Slide Generation")
-    # Use st_autorefresh to refresh the script every 2 seconds
-    st_autorefresh(interval=2000, limit=None, key="data_refresh")
+    # Use st_autorefresh to refresh the script every 2 seconds only if workflow is not complete
+    if not st.session_state.workflow_complete:
+        st_autorefresh(interval=2000, limit=None, key="data_refresh")
 
     # Sidebar with form
     with st.sidebar:
@@ -240,13 +265,16 @@ def main():
 
     with left_column:
         st.write("Workflow Executions:")
-        expander_placeholder = st.expander("🤖⚒️Agent is working...")
+        expander_placeholder = st.empty()
+        # expander_placeholder = st.expander("🤖⚒️Agent is working...")
 
     with right_column:
         st.write("Workflow Artifacts:")
         artifact_render = st.empty()
 
     if submit_button:
+        # Reset the workflow_complete flag for a new workflow
+        st.session_state.workflow_complete = False
         # Start the long-running task in a separate thread
         if (
             st.session_state.workflow_thread is None
@@ -278,10 +306,18 @@ def main():
         st.write("Background thread is not running.")
 
     # Display received lines
-    for line in st.session_state.get("received_lines", []):
-        with expander_placeholder:
-            st.write(line)
-            st.divider()
+    # for line in st.session_state.get("received_lines", []):
+    #     with expander_placeholder:
+    #         st.write(line)
+    #         st.divider()
+
+    if st.session_state.received_lines:
+        with expander_placeholder.container():
+            # Create or update the expander with the latest truncated line
+            expander = st.expander(st.session_state.expander_label)
+            for line in st.session_state.received_lines:
+                expander.write(line)
+                expander.divider()
 
     # Include the user input fragment
     user_input_fragment(artifact_render)
