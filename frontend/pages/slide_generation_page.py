@@ -237,7 +237,7 @@ def user_input_fragment(placeholder):
 
                 # Handle the submission of user response
                 if st.button(
-                    "Submit Response", key=f"submit_response_{current_prompt}"
+                    "Submit Feedback", key=f"submit_response_{current_prompt}"
                 ):
                     if not st.session_state.user_response_submitted:
                         # Retrieve approval and feedback using unique keys

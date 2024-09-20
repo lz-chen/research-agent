@@ -10,8 +10,6 @@ services:
       - "8000:80"
     networks:
       - app-network
-#    extra_hosts:
-#      - "host.docker.internal:host-gateway"
     volumes:
       - .env:/app/.env
       - ./data:/app/data
@@ -40,7 +38,6 @@ services:
     volumes:
       - ./mlruns:/mlruns:rw
       - ./mlartifacts:/mlartifacts:rw
-#      - ./.env:/app/.env
     environment:
       MLFLOW_LOGGING_LEVEL: "DEBUG"
 #      MLFLOW_TRACKING_URI: "http://mlflow:8080"
