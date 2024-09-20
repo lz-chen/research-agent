@@ -160,14 +160,6 @@ Here is the slide content:
 {slide_content}
 """
 
-# General rules of selecting layout:
-# - if the slide text is list of topics or agenda, select one of the 'Agenda' layout
-# - if the slide text contains text and some paragraph, select one of the 'Content' layout
-# - if the slide text is very short, depending on the text, select either 'Frontpage' or 'Thank you' layout
-# - Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
-# by the order they appear in the list of placeholders)
-# - Use appropriate color and style from the template to make the slide visually appealing
-
 SLIDE_GEN_PMT = """
 You are an AI that generate slide deck from a given slide outlines and uses the
  template file provided. Write python-pptx code for generating the slide deck by loop over the slide 
@@ -208,11 +200,6 @@ If all rules are satisfied, you need to provide a message that the slide deck is
 
 """
 
-# SLIDE_MODIFICATION_PMT = """
-# You are an AI that modifies the slide deck according to given feedback using python-pptx library.
-# Your goal is to modify the latest version of the slide deck and make sure to a new modified version
-#  of the slide deck is stored.
-# """
 SLIDE_MODIFICATION_PMT = """
 You are an AI assistant specialized in modifying slide decks based on user feedback using the python-pptx library. 
 Follow these steps precisely:
