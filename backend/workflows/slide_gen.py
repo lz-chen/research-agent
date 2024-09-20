@@ -160,6 +160,16 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         shutil.copy(final_file, destination)
         logger.info(f"Copied final slide to {destination}")
 
+        # Construct the corresponding PDF file path
+        final_pdf_file = final_file.with_suffix(".pdf")
+        if final_pdf_file.exists():
+            # Copy the final PDF file to the destination
+            destination_pdf = self.workflow_artifacts_path / "final.pdf"
+            shutil.copy(final_pdf_file, destination_pdf)
+            logger.info(f"Copied final PDF to {destination_pdf}")
+        else:
+            logger.warning(f"Corresponding PDF file {final_pdf_file} not found.")
+
     def get_all_layout(self):
         """Get all layout information"""
         return self.all_layout

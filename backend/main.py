@@ -93,10 +93,13 @@ async def run_workflow_endpoint(topic: ResearchTopic):
             final_result = await task
 
             # Construct the download URL
-            download_url = f"http://backend:80/download/{workflow_id}"
+            download_pptx_url = f"http://backend:80/download_pptx/{workflow_id}"
+            download_pdf_url = f"http://backend:80/download_pdf/{workflow_id}"
+
             final_result_with_url = {
                 "result": final_result,
-                "download_url": download_url,
+                "download_pptx_url": download_pptx_url,
+                "download_pdf_url": download_pdf_url,
             }
 
             yield f"{json.dumps({'final_result': final_result_with_url})}\n\n"
@@ -133,7 +136,7 @@ async def submit_user_input(data: dict = Body(...)):
         )
 
 
-@app.get("/download/{workflow_id}")
+@app.get("/download_pptx/{workflow_id}")
 async def download_pptx(workflow_id: str):
     # Adjust the path according to your directory structure
     file_path = (
@@ -150,6 +153,22 @@ async def download_pptx(workflow_id: str):
         )
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+
+@app.get("/download_pdf/{workflow_id}")
+async def download_pdf(workflow_id: str):
+    file_path = (
+        Path(settings.WORKFLOW_ARTIFACTS_PATH)
+        / "SlideGenerationWorkflow"
+        / workflow_id
+        / "final.pdf"
+    )
+    if file_path.exists():
+        return FileResponse(
+            path=file_path, media_type="application/pdf", filename=f"{workflow_id}.pdf"
+        )
+    else:
+        raise HTTPException(status_code=404, detail="PDF file not found")
 
 
 @app.get("/")

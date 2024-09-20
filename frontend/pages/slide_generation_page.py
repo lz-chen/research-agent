@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 
@@ -38,6 +39,15 @@ if "user_input_event" not in st.session_state:
 
 if "user_response_submitted" not in st.session_state:
     st.session_state.user_response_submitted = False
+
+if "download_url_pptx" not in st.session_state:
+    st.session_state.download_url_pptx = None
+
+if "download_url_pdf" not in st.session_state:
+    st.session_state.download_url_pdf = None
+
+if "pdf_data" not in st.session_state:
+    st.session_state.pdf_data = None
 
 
 async def fetch_streaming_data(url: str, payload: dict = None):
@@ -122,7 +132,8 @@ def process_messages():
                 st.session_state.received_lines.append(content)
             elif msg_type == "final_result":
                 st.session_state.final_result = content
-                st.session_state.download_url = content.get("download_url")
+                st.session_state.download_url_pptx = content.get("download_pptx_url")
+                st.session_state.download_url_pdf = content.get("download_pdf_url")
             elif msg_type == "error":
                 st.error(content)
         except queue.Empty:
@@ -219,8 +230,8 @@ def main():
         with st.form(key="slide_gen_form"):
             query = st.text_input(
                 "Enter the topic of your research:",
-                value="powerpoint slides automation",
-                placeholder="powerpoint slides automation",
+                value="powerpoint slides automation with machine learning",
+                placeholder="powerpoint slides automation with machine learning",
             )
             submit_button = st.form_submit_button(label="Submit")
 
@@ -275,21 +286,46 @@ def main():
     # Include the user input fragment
     user_input_fragment(artifact_render)
 
-    # Render the download button if download_url is available
-    if "download_url" in st.session_state and st.session_state.download_url:
-        download_url = st.session_state.download_url
-        try:
-            response = requests.get(download_url)
-            response.raise_for_status()
-            pptx_data = response.content
-            st.download_button(
-                label="Download Generated PPTX",
-                data=pptx_data,
-                file_name="generated_slides.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            )
-        except Exception as e:
-            st.error(f"Failed to download the PPTX file: {str(e)}")
+    # Render the PDF and download button in the right_column
+    with right_column:
+        # Display the PDF if available
+        if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
+            download_url_pdf = st.session_state.download_url_pdf
+            try:
+                # Fetch the PDF content
+                pdf_response = requests.get(download_url_pdf)
+                pdf_response.raise_for_status()
+                st.session_state.pdf_data = pdf_response.content
+
+                st.markdown("### Generated Slide Deck:")
+                # Display the PDF using an iframe
+                st.markdown(
+                    f'<iframe src="data:application/pdf;base64,{base64.b64encode(st.session_state.pdf_data).decode()}" width="100%" height="600px" type="application/pdf"></iframe>',
+                    unsafe_allow_html=True,
+                )
+            except Exception as e:
+                st.error(f"Failed to load the PDF file: {str(e)}")
+
+        # Provide the download button for PPTX if available
+        if (
+            "download_url_pptx" in st.session_state
+            and st.session_state.download_url_pptx
+        ):
+            download_url_pptx = st.session_state.download_url_pptx
+            try:
+                # Fetch the PPTX content
+                pptx_response = requests.get(download_url_pptx)
+                pptx_response.raise_for_status()
+                pptx_data = pptx_response.content
+
+                st.download_button(
+                    label="Download Generated PPTX",
+                    data=pptx_data,
+                    file_name="generated_slides.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                )
+            except Exception as e:
+                st.error(f"Failed to load the PPTX file: {str(e)}")
 
 
 main()
