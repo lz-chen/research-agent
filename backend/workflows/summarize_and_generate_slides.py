@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import click
 from llama_index.core import Settings
@@ -6,7 +7,7 @@ from llama_index.core import Settings
 from services.llms import llm_gpt4o
 from services.embeddings import aoai_embedder
 import logging
-import sys
+
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -21,33 +22,72 @@ from workflows.events import *
 from workflows.slide_gen import SlideGenerationWorkflow
 from workflows.summary_gen import SummaryGenerationWorkflow
 
-
-logging.basicConfig(
-    stream=sys.stdout,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 Settings.llm = llm_gpt4o
 Settings.embed_model = aoai_embedder
 
 
 class SummaryAndSlideGenerationWorkflow(Workflow):
+
+    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize user input future
+        self.wid = wid
+        self.user_input_future = asyncio.Future()
+
+    async def run(self, *args, **kwargs):
+        self.loop = asyncio.get_running_loop()  # Store the event loop
+        return await super().run(*args, **kwargs)
+
+    async def reset_user_input_future(self):
+        self.user_input_future = self.loop.create_future()
+
+    async def run_subworkflow(self, sub_wf, ctx, **kwargs):
+        logger.debug(f"Starting sub-workflow: {sub_wf.__class__.__name__}")
+        sub_wf.user_input_future = self.user_input_future
+        sub_wf.parent_workflow = self
+        sub_task = asyncio.create_task(sub_wf.run(**kwargs))
+        logger.debug(f"Created sub-workflow task: {sub_task}")
+        try:
+            async for event in sub_wf.stream_events():
+                logger.debug(f"Relaying event from sub-workflow: {event}")
+                ctx.write_event_to_stream(event)
+            result = await sub_task
+            logger.debug(f"Sub-workflow completed with result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in sub-workflow: {e}")
+            raise
+
     @step
     async def summary_gen(
         self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
     ) -> SummaryWfReadyEvent:
-        print("Need to run reflection")
-        res = await summary_gen_wf.run(user_query=ev.user_query)
+        # res = await summary_gen_wf.run(user_query=ev.user_query)
+        res = await self.run_subworkflow(summary_gen_wf, ctx, user_query=ev.user_query)
+
         return SummaryWfReadyEvent(summary_dir=res)
 
     @step
     async def slide_gen(
-        self, ctx: Context, ev: SummaryWfReadyEvent, slide_gen_wf: SlideGenerationWorkflow
+        self,
+        ctx: Context,
+        ev: SummaryWfReadyEvent,
+        slide_gen_wf: SlideGenerationWorkflow,
     ) -> StopEvent:
-        res = await slide_gen_wf.run(file_dir=ev.summary_dir)
-        return StopEvent()
+        # res = await slide_gen_wf.run(file_dir=ev.summary_dir)
+        res = await self.run_subworkflow(slide_gen_wf, ctx, file_dir=ev.summary_dir)
+
+        return StopEvent(res)
 
 
 async def run_workflow(user_query: str):

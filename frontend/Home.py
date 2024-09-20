@@ -8,9 +8,8 @@ def main_page():
         layout="wide",
         initial_sidebar_state="expanded",  # expand side bar (horizontally)
     )
-
-    # # add_logo()
-    # st.logo("logo.png")
+    # set_streamlit_page_config_once()
+    # st.title("Paper research and slide generation")
 
     main_page = st.Page("pages/main_page.py", title="🏠 Home")
     slide_gen_page = st.Page(

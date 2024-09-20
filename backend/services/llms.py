@@ -2,6 +2,7 @@ from llama_index.llms.azure_openai import AzureOpenAI
 from llama_index.multi_modal_llms.azure_openai import AzureOpenAIMultiModal
 
 from config import settings
+from llama_index.llms.anthropic import Anthropic
 
 llm_gpt4o = AzureOpenAI(
     azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
@@ -57,3 +58,11 @@ def new_gpt4o_mini(temperature=0.0):
         api_key=settings.AZURE_OPENAI_API_KEY,
         api_version=settings.AZURE_OPENAI_API_VERSION,
     )
+
+
+# def new_claude_sonnet(temperature=0.0):
+#     return Anthropic(model=settings.CLAUDE_MODEL_NAME,
+#                      api_key=settings.ANTHROPIC_API_KEY,
+#                      temperature=temperature,
+#                      max_tokens=8192,
+#                      )

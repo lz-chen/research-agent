@@ -19,8 +19,8 @@ the frontend part of this project is still under development.
 │   ├── models.py               # Pydantic models
 │   ├── main.py                 # Main entry point for FastAPI
 │   ├── Dockerfile              # Dockerfile for backend
-│   ├── pyproject.toml          # Backend dependencies
-│   └── __init__.py             # Package initialization
+│   └── pyproject.toml          # Backend dependencies
+│  
 ├── frontend                    # Frontend code using Streamlit
 │   ├── pages                   # Streamlit pages
 │   ├── Dockerfile              # Dockerfile for frontend
@@ -47,18 +47,23 @@ the frontend part of this project is still under development.
    poetry install
    ```
 
-2. Set up the environment variables by creating a `.env` file in the root directory,
+2. **Set up environment variables**
+    
+    Create a `.env` file in the root directory,
     and add the following environment variables as those listed in `.env.example`
 
-3. Setup mlflow for tracing:
-    ```bash
-     mlflow server --backend-store-uri sqlite:///mlruns.db --default-artifact-root ./mlruns
-    ```
+
+3. **Build and run the Docker containers**:
+   ```bash
+   docker-compose up --build
+   ```
+
+4. **Access the application**:
+   - Frontend: Open your browser and go to `http://localhost:8501`
+   - Backend: API documentation available at `http://localhost:8000/docs`
 ## Usage
 
-To run the research agent workflow, from root directory, run the following command:
+- **Summary and Slide Generation**: Navigate to the "Slide Generation" page in the Streamlit app, enter 
+the research topic query, and click the submit button to start the process.
 
-```bash
-poetry run python backend/workflows/summarize_and_generate_slides.py -q <YOUR_INPUT_QUERY>
-```
 

@@ -15,6 +15,8 @@ services:
       - ./data:/app/data
       - ./workflow_artifacts:/app/workflow_artifacts
       - ~/.azure:/root/.azure
+      - ./mlruns:/app/mlruns:rw
+      - ./mlartifacts:/app/mlartifacts:rw
 
   frontend:
     build:
@@ -25,6 +27,26 @@ services:
       - "8501:8501"
     networks:
       - app-network
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    ports:
+      - "5000:5000"
+      - "8080:8080"
+    networks:
+      - app-network
+    volumes:
+      - ./mlruns:/mlruns:rw
+      - ./mlartifacts:/mlartifacts:rw
+    environment:
+      MLFLOW_LOGGING_LEVEL: "DEBUG"
+#      MLFLOW_TRACKING_URI: "http://mlflow:8080"
+#      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow/mlruns/mlruns.db"
+#      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/mlflow/mlruns"
+    command: >
+      mlflow server --host 0.0.0.0 --port 8080
+      --backend-store-uri sqlite:///mlruns/mlruns.db
+#      --default-artifact-root file:///mlruns
 
 networks:
   app-network:

@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8501
 
-CMD ["poetry", "run", "streamlit", "run", "app.py"]
+CMD ["poetry", "run", "streamlit", "run", "Home.py"]

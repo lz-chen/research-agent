@@ -1,11 +1,10 @@
 IS_CITATION_RELEVANT_PMT = """
 You are helping a researcher decide whether a paper is relevant to their current research topic:
-Use Machine learning, NLP or GenAI technologies for automating powerpoint presentation slide generation, 
-or use genAI for other layout design task.
+`{research_topic}`
 
 You are given the title and abstract of a paper.
-title: {title}
-abstract: {abstract}
+title: `{title}`
+abstract: `{abstract}`
 
 Give a score indicating the relevancy to the research topic, where:
 Score 0: Not relevant
@@ -161,14 +160,6 @@ Here is the slide content:
 {slide_content}
 """
 
-# General rules of selecting layout:
-# - if the slide text is list of topics or agenda, select one of the 'Agenda' layout
-# - if the slide text contains text and some paragraph, select one of the 'Content' layout
-# - if the slide text is very short, depending on the text, select either 'Frontpage' or 'Thank you' layout
-# - Make sure to choose a layout that has main text box placeholder after the title placeholder (this can be judged
-# by the order they appear in the list of placeholders)
-# - Use appropriate color and style from the template to make the slide visually appealing
-
 SLIDE_GEN_PMT = """
 You are an AI that generate slide deck from a given slide outlines and uses the
  template file provided. Write python-pptx code for generating the slide deck by loop over the slide 
@@ -188,7 +179,7 @@ Requirement:
 - Use layout and text box index according to what is given in each of the slide content item 
 - Vary the content layout of the slides to make the presentation engaging
 - Generate the python code before you try to execute it
-- Save the final slide pptx file with name `{final_slide_fname}`
+- Save the final slide pptx file with name `{generated_slide_fname}`
 
 """
 # - For each key heading in the paper summary, create a different text box in the slide
@@ -200,8 +191,8 @@ You are an AI that validates the slide deck generated according to following rul
 - The slide texts are clearly readable, not cut off, not overflowing the textbox
  and not overlapping with other elements
 
-If any of the above rules are violated, you need to provide the page index (index starts from 0) of the slide
- that violates the rule, as well as suggestion on how to fix it. Note: missing key aspect can be due to the 
+If any of the above rules are violated, you need to provide suggestion on how to fix it.
+ Note: missing key aspect can be due to the 
  font size being too large and the text is not visible in the slide, make sure to suggest checking the original 
  slide content texts to see if they exist, and reducing the font size of the corresponding content 
  text box as a solution.
@@ -210,7 +201,30 @@ If all rules are satisfied, you need to provide a message that the slide deck is
 """
 
 SLIDE_MODIFICATION_PMT = """
-You are an AI that modifies the slide deck according to given feedback using python-pptx library.
-You need to modify the latest version of the slide deck and save a new version of the slide deck.
+You are an AI assistant specialized in modifying slide decks based on user feedback using the python-pptx library. 
+Follow these steps precisely:
+1. Understand Feedback and plan for modifications.
+	- Analyzes the user’s feedback to grasp the required changes.
+	- Develops a clear strategy on how to implement feedback points effectively in the slide deck.
+	
+2. Generate Python Code:
+   - Write Python code using the python-pptx library that applies the modifications 
+   to the latest version of the slide deck.
+   - Ensure the code accurately reflects all aspects of the feedback.
 
+3. Execute the Code:
+   - Run the generated Python code to modify the slide deck.
+   - Handle any potential errors during execution to ensure the process completes successfully.
+
+4. Store the Modified Slide Deck:
+   - Save the newly modified slide deck as a new file (file path specified by user).
+   - Confirm that the file is stored correctly.
+   
+5. Confirm Completion:
+   - Only after successfully completing all the above steps, provide a confirmation message to the user
+    indicating that the slide deck has been modified and stored successfully.
+   - Do not provide any user-facing responses before ensuring the slide deck is properly updated and saved.
+
+**Important**: Do not skip any steps or provide responses to the user until the entire process
+ is fully completed and the new slide deck file is securely stored.
 """
