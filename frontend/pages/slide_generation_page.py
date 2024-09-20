@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+from collections import deque
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -53,6 +54,21 @@ if "pdf_data" not in st.session_state:
 
 if "expander_label" not in st.session_state:
     st.session_state.expander_label = "🤖⚒️Agent is working..."
+
+# Initialize feedback-related session state variables
+if "user_feedback" not in st.session_state:
+    st.session_state.user_feedback = ""
+
+if "approval_state" not in st.session_state:
+    st.session_state.approval_state = None
+
+# Initialize a queue for pending user input prompts
+if "pending_user_inputs" not in st.session_state:
+    st.session_state.pending_user_inputs = deque()
+
+# Initialize a prompt counter
+if "prompt_counter" not in st.session_state:
+    st.session_state.prompt_counter = 0
 
 
 async def fetch_streaming_data(url: str, payload: dict = None):
@@ -128,15 +144,31 @@ def process_messages():
             if msg_type == "workflow_id":
                 st.session_state.workflow_id = content
             elif msg_type == "user_input_required":
-                st.session_state.user_input_required = True
-                st.session_state.user_input_prompt = content
-                st.session_state.user_response_submitted = (
-                    False  # Reset the flag for new user input request
-                )
+                if (
+                    st.session_state.user_input_required
+                    and not st.session_state.user_response_submitted
+                ):
+                    # User is currently interacting; enqueue the new prompt
+                    st.session_state.pending_user_inputs.append(content)
+                    logging.warning("A new user input request has been queued.")
+                else:
+                    # No active user interaction; process the prompt immediately
+                    st.session_state.user_input_required = True
+                    st.session_state.user_input_prompt = content
+                    st.session_state.user_response_submitted = False
+
+                    # Reset feedback fields
+                    st.session_state.user_feedback = ""
+                    st.session_state.approval_state = None
+
+                    # Increment the prompt counter
+                    st.session_state.prompt_counter += 1
             elif msg_type == "message":
                 st.session_state.received_lines.append(content)
                 truncated_line = (
-                    "🤖⚒️ " + content[:75] + "..." if len(content) > 75 else content
+                    "🤖⚒️Agent is working...\n" + content[:75] + "..."
+                    if len(content) > 75
+                    else content
                 )
                 st.session_state.expander_label = truncated_line
             elif msg_type == "final_result":
@@ -158,18 +190,21 @@ def user_input_fragment(placeholder):
     container = placeholder.container()
     with container:
         logging.debug(
-            f"user_input_fragment: st.session_state.user_input_required: {st.session_state.user_input_required}"
+            f"user_input_fragment: "
+            f"st.session_state.user_input_required: {st.session_state.user_input_required}"
         )
         logging.debug(
-            f"user_input_fragment: st.session_state.user_response_submitted: {st.session_state.user_response_submitted}"
+            f"user_input_fragment: "
+            f"st.session_state.user_response_submitted: {st.session_state.user_response_submitted}"
         )
 
         if st.session_state.user_input_required:
             data = st.session_state.user_input_prompt
             event_type = data.get("event_type")
             if event_type == "request_user_input":
-                st.write(
-                    f"User input required. current submit state: {st.session_state.get('user_response_submitted')}"
+                logging.info(
+                    f"User input required. "
+                    f"current submit state: {st.session_state.get('user_response_submitted')}"
                 )
                 summary = data.get("event_content").get("summary")
                 outline = data.get("event_content").get("outline")
@@ -177,6 +212,7 @@ def user_input_fragment(placeholder):
                     "message", "Please review the outline."
                 )
 
+                # display the content for user input
                 st.markdown("## Original Summary:")
                 st.text_area("Summary", summary, disabled=True, height=400)
                 st.divider()
@@ -184,67 +220,96 @@ def user_input_fragment(placeholder):
                 st.json(outline)
                 st.write(prompt_message)
 
-                # Check if user response was submitted and reset values before instantiating widgets
-                if st.session_state.user_response_submitted:
-                    # Reset session state before creating the widget
-                    st.session_state.user_feedback = ""
-                    st.session_state.approval_state = None
+                # Define unique keys for widgets
+                current_prompt = st.session_state.prompt_counter
+                approval_key = f"approval_state_{current_prompt}"
+                feedback_key = f"user_feedback_{current_prompt}"
 
-                sentiment_mapping = [":material/thumb_down:", ":material/thumb_up:"]
-                approval = st.feedback("thumbs", key="approval_state")
-                st.write(f"Current Approval state is : {approval}")
-                logging.info(f"Current Approval state is : {approval}")
+                # Display the approval feedback widget
+                approval = st.feedback("thumbs", key=approval_key)
+                st.write(f"Current Approval state is: {approval}")
+                logging.info(f"Current Approval state is: {approval}")
+
+                # Display the feedback text area
                 feedback = st.text_area(
-                    "Please provide feedback if you have any:", key="user_feedback"
+                    "Please provide feedback if you have any:", key=feedback_key
                 )
 
-                if st.button("Submit Response", key="submit_response"):
+                # Handle the submission of user response
+                if st.button(
+                    "Submit Response", key=f"submit_response_{current_prompt}"
+                ):
                     if not st.session_state.user_response_submitted:
+                        # Retrieve approval and feedback using unique keys
+                        approval_state = st.session_state.get(approval_key)
+                        user_feedback = st.session_state.get(feedback_key, "")
+
+                        # Ensure approval_state is valid
+                        if approval_state not in [0, 1]:
+                            st.error("Please select an approval option.")
+                            return
+
                         user_response = {
-                            "approval": sentiment_mapping[approval],
-                            "feedback": feedback,
+                            "approval": (
+                                ":material/thumb_down:"
+                                if approval_state == 0
+                                else ":material/thumb_up:"
+                            ),
+                            "feedback": user_feedback,
                         }
                         # Send the user's response to the backend
                         st.write(
                             f"Submitting user response: {user_response}"
                         )  # Logging
                         logging.debug(
-                            f"Submitting approval: {approval}, feedback: {feedback}"
+                            f"Submitting approval: {approval_state}, feedback: {user_feedback}"
                         )  # Logging
-                        response = requests.post(
-                            "http://backend:80/submit_user_input",
-                            json={
-                                "workflow_id": st.session_state.workflow_id,
-                                "user_input": json.dumps(user_response),
-                            },
-                        )
-                        logging.info(
-                            f"Backend response for submitting approval: {response.status_code}"
-                        )
+                        try:
+                            response = requests.post(
+                                "http://backend:80/submit_user_input",
+                                json={
+                                    "workflow_id": st.session_state.workflow_id,
+                                    "user_input": json.dumps(user_response),
+                                },
+                            )
+                            response.raise_for_status()
+                            logging.info(
+                                f"Backend response for submitting approval: {response.status_code}"
+                            )
+                        except requests.RequestException as e:
+                            st.error(f"Failed to submit user input: {str(e)}")
+                            return
+
                         st.session_state.user_input_required = False
                         st.session_state.user_input_prompt = None
                         st.session_state.user_response_submitted = True
-                        # st.session_state.user_feedback = ""  # Reset the feedback text area
-                        # st.session_state.approval_state = None  # Reset the thumbs-up/thumbs-down approval
-
                         # Signal the background thread
                         st.session_state.user_input_event.set()
-                else:
-                    st.write("Response already submitted.")
+
+                        st.success(f"```Response submitted for {summary[:40]}...```")
+
+                        # Process the next prompt in the queue, if any
+                        if st.session_state.pending_user_inputs:
+                            next_prompt = st.session_state.pending_user_inputs.popleft()
+                            st.session_state.user_input_required = True
+                            st.session_state.user_input_prompt = next_prompt
+                            st.session_state.user_response_submitted = False
+
+                            # Reset feedback fields
+                            st.session_state.user_feedback = ""
+                            st.session_state.approval_state = None
+
+                            # Increment the prompt counter for the new prompt
+                            st.session_state.prompt_counter += 1
+
+                            st.success("A new user input request has been loaded.")
+                    else:
+                        st.write("Response already submitted.")
+            else:
+                st.write("No user input required at this time.")
 
 
 def main():
-    # make expander scrollable
-    css = """
-    <style>
-        [data-testid="stExpander"] div:has(>.streamlit-expanderContent) {
-            overflow: scroll;
-            height: 800px;
-        }
-    </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
-
     st.title("Slide Generation")
     # Use st_autorefresh to refresh the script every 2 seconds only if workflow is not complete
     if not st.session_state.workflow_complete:
@@ -305,12 +370,6 @@ def main():
     else:
         st.write("Background thread is not running.")
 
-    # Display received lines
-    # for line in st.session_state.get("received_lines", []):
-    #     with expander_placeholder:
-    #         st.write(line)
-    #         st.divider()
-
     if st.session_state.received_lines:
         with expander_placeholder.container():
             # Create or update the expander with the latest truncated line
@@ -318,6 +377,17 @@ def main():
             for line in st.session_state.received_lines:
                 expander.write(line)
                 expander.divider()
+
+        # # make expander scrollable
+        # css = """
+        # <style>
+        #     [data-testid="stExpander"] div:has(>.streamlit-expanderContent) {
+        #         overflow: scroll;
+        #         height: 800px;
+        #     }
+        # </style>
+        # """
+        # st.markdown(css, unsafe_allow_html=True)
 
     # Include the user input fragment
     user_input_fragment(artifact_render)

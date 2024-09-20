@@ -57,8 +57,12 @@ async def run_workflow_endpoint(topic: ResearchTopic):
             wid=workflow_id, timeout=800, verbose=True
         )
     )
+    # toggle for skipping running SummaryGenerationWorkflow
+    # and debugging SlideGenerationWorkflow
     # wf.add_workflows(
-    #     summary_gen_wf=SummaryGenerationDummyWorkflow(wid=workflow_id,timeout=800, verbose=True)
+    #     summary_gen_wf=SummaryGenerationDummyWorkflow(
+    #         wid=workflow_id, timeout=800, verbose=True
+    #     )
     # )
     wf.add_workflows(
         slide_gen_wf=SlideGenerationWorkflow(
@@ -74,14 +78,6 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         loop = asyncio.get_running_loop()
         logger.debug(f"event_generator: loop id {id(loop)}")
         yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
-
-        # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-        # mlflow.set_experiment("SummaryAndSlideGenerationWorkflow")
-        # mlflow.llama_index.autolog()
-        # mlflow.config.enable_async_logging()
-        # mlflow.tracing.enable()
-        # mlflow.start_run()
-        # logger.debug("run_workflow_endpoint: mlflow.start_run()")
 
         task = asyncio.create_task(wf.run(user_query=topic.query))
         logger.debug(f"event_generator: Created task {task}")
@@ -108,8 +104,6 @@ async def run_workflow_endpoint(topic: ResearchTopic):
             logger.error(error_message)
             yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
         finally:
-            # mlflow.end_run()
-            # logger.debug("run_workflow_endpoint: mlflow.end_run()")
             # Clean up
             workflows.pop(workflow_id, None)
 

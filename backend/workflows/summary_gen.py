@@ -1,12 +1,8 @@
 import asyncio
 import inspect
-import os
-import random
-import string
 import uuid
 
 import click
-import mlflow
 from llama_index.core import Settings
 from tavily import TavilyClient
 
@@ -18,7 +14,6 @@ from llama_index.core.workflow import (
     Context,
     StartEvent,
     StopEvent,
-    Workflow,
     step,
     draw_all_possible_flows,
 )
@@ -58,12 +53,9 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     n_max_final_papers: int = 5
 
     def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
-        # self.parent_workflow = None
         self.wid = wid
         super().__init__(*args, **kwargs)
-        # make random string of length 10 and make it a suffix for WORKFLOW_ARTIFACTS_PATH
         class_name = self.__class__.__name__
-        # s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
         self.workflow_artifacts_path = (
             Path(settings.WORKFLOW_ARTIFACTS_PATH)
             .joinpath(class_name)
@@ -223,7 +215,9 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
 # workflow for debugging purpose
 class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
-    wid: Optional[uuid.UUID] = uuid.uuid4()
+    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
+        self.wid = wid
+        super().__init__(*args, **kwargs)
 
     @step
     async def dummy_start_step(self, ev: StartEvent) -> DummyEvent:
