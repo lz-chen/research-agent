@@ -132,7 +132,6 @@ async def submit_user_input(data: dict = Body(...)):
 
 @app.get("/download_pptx/{workflow_id}")
 async def download_pptx(workflow_id: str):
-    # Adjust the path according to your directory structure
     file_path = (
         Path(settings.WORKFLOW_ARTIFACTS_PATH)
         / "SlideGenerationWorkflow"

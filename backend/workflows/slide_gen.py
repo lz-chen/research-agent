@@ -30,19 +30,15 @@ from services.llms import (
     llm_gpt4o,
     new_gpt4o,
     new_gpt4o_mini,
-    mm_gpt4o,
-    new_claude_sonnet,
     new_mm_gpt4o,
 )
 from services.embeddings import aoai_embedder
 import logging
-import sys
 from llama_index.core import PromptTemplate
 from llama_index.core.workflow import (
     Context,
     StartEvent,
     StopEvent,
-    Workflow,
     step,
     draw_all_possible_flows,
 )
@@ -205,7 +201,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                         event_content={
                             "message": f"React Agent Reasoning: {r.get_content()}"
                         },
-                    ).json()
+                    ).model_dump()
                 )
             )
 
@@ -224,7 +220,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": f"React Agent Final Response: {response}"
                     },
-                ).json()
+                ).model_dump()
             )
         )
 
@@ -246,7 +242,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": f"Reading {ctx.data['n_summaries']} summaries from markdown files..."
                     },
-                ).json()
+                ).model_dump()
             )
         )
         for i, f in enumerate(markdown_files):
@@ -257,7 +253,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                         event_type="server_message",
                         event_sender=inspect.currentframe().f_code.co_name,
                         event_content={"message": f"Sending {i}th summaries..."},
-                    ).json()
+                    ).model_dump()
                 )
             )
             self.send_event(SummaryEvent(summary=s))
@@ -275,7 +271,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={"message": "Making summary to slide outline..."},
-                ).json()
+                ).model_dump()
             )
         )
         llm = new_gpt4o_mini(0.1)
@@ -288,7 +284,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             )
             response = await program.acall(
                 summary_txt=ev.summary,
-                outline_txt=ev.outline.json(),
+                outline_txt=ev.outline.model_dump(),
                 feedback=ev.feedback,
                 description="Data model for the slide page outline",
             )
@@ -323,7 +319,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={"message": "Gathering feedback on the outline..."},
-                ).json()
+                ).model_dump()
             )
         )
 
@@ -411,7 +407,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": "Outlines for all papers are ready! Adding layout info..."
                     },
-                ).json()
+                ).model_dump()
             )
         )
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
@@ -427,7 +423,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         slides_w_layout = []
         for n, ev in enumerate(ready):
             response = await program.acall(
-                slide_content=ev.outline.json(),
+                slide_content=ev.outline.model_dump(),
                 available_layout_names=all_layout_names,
                 available_layouts=self.all_layout,
                 description="Data model for the slide page outline with layout",
@@ -450,7 +446,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                         "message": f"{len(slides_w_layout)} outlines with layout are ready! "
                         f"Stored in {slide_outlines_json}"
                     },
-                ).json()
+                ).model_dump()
             )
         )
 
@@ -468,7 +464,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={"message": "Agent is generating slide deck..."},
-                ).json()
+                ).model_dump()
             )
         )
         agent = ReActAgent.from_tools(
@@ -496,7 +492,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         # use `agent.create_task` to get the stepwise execution result,
         # end result is equal to `agent.chat`
         task = agent.create_task(
-            f"An example of outline item in json is {ev.outline_example.json()},"
+            f"An example of outline item in json is {ev.outline_example.model_dump()},"
             f" generate a slide deck"
         )
         await self.run_react_agent(agent, task, ctx)
@@ -509,7 +505,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": f"Agent finished! Downloaded files to local path: {local_files}"
                     },
-                ).json()
+                ).model_dump()
             )
         )
         return SlideGeneratedEvent(
@@ -542,7 +538,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
                     },
-                ).json()
+                ).model_dump()
             )
         )
         needs_modify = []
@@ -578,7 +574,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                         event_type="server_message",
                         event_sender=inspect.currentframe().f_code.co_name,
                         event_content={"message": "The slides are fixed!"},
-                    ).json()
+                    ).model_dump()
                 )
             )
             self.copy_final_slide()
@@ -595,7 +591,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                             event_content={
                                 "message": "The slides are not fixed, retrying..."
                             },
-                        ).json()
+                        ).model_dump()
                     )
                 )
                 return SlideValidationEvent(results=needs_modify)
@@ -608,7 +604,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                             event_content={
                                 "message": f"The slides are not fixed after {self.max_validation_retries} retries!"
                             },
-                        ).json()
+                        ).model_dump()
                     )
                 )
                 self.copy_final_slide()
@@ -633,7 +629,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_content={
                         "message": "Modifying the slides based on the feedback..."
                     },
-                ).json()
+                ).model_dump()
             )
         )
 
@@ -660,7 +656,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         task = agent.create_task(
             f"The latest version of the slide deck can be found here: "
             f"`/mnt/data/{ctx.data['latest_pptx_file']}`.\n"
-            f"The feedback provided is as follows: '{ev.json()}'\n"
+            f"The feedback provided is as follows: '{ev.model_dump()}'\n"
             f"Save the final modified slide deck as `{modified_pptx_path}`."
         )
         await self.run_react_agent(agent, task, ctx)

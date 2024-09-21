@@ -84,7 +84,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={"message": f"Querying Tavily with: '{query}'"},
-                ).json()
+                ).model_dump()
             )
         )
         tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
@@ -114,7 +114,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                         event_content={
                             "message": f"Found related paper: {paper.title}"
                         },
-                    ).json()
+                    ).model_dump()
                 )
             )
             self.send_event(PaperEvent(paper=paper))
@@ -158,7 +158,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                         "message": f"Downloading filtered relevant papers:\n"
                         f"{' | '.join([p.paper.title for p in papers])}"
                     },
-                ).json()
+                ).model_dump()
             )
         )
         download_relevant_citations(papers_dict, Path(self.papers_download_path))
@@ -197,7 +197,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={"message": f"Summarizing paper: {ev.pdf_path}"},
-                ).json()
+                ).model_dump()
             )
         )
         return SummaryStoredEvent(fpath=ev.summary_path)

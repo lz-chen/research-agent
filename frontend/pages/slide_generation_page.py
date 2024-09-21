@@ -186,15 +186,15 @@ def process_messages():
 
 
 # @st.fragment
-def user_input_fragment(placeholder):
+def gather_outline_feedback(placeholder):
     container = placeholder.container()
     with container:
         logging.debug(
-            f"user_input_fragment: "
+            f"gather_outline_feedback: "
             f"st.session_state.user_input_required: {st.session_state.user_input_required}"
         )
         logging.debug(
-            f"user_input_fragment: "
+            f"gather_outline_feedback: "
             f"st.session_state.user_response_submitted: {st.session_state.user_response_submitted}"
         )
 
@@ -390,7 +390,7 @@ def main():
         # st.markdown(css, unsafe_allow_html=True)
 
     # Include the user input fragment
-    user_input_fragment(artifact_render)
+    gather_outline_feedback(artifact_render)
 
     # Render the PDF and download button in the right_column
     with right_column:
