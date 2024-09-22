@@ -4,8 +4,7 @@ This repository contains a research agent application designed to
 facilitate paper research and slide generation. It consists of a
 backend powered by FastAPI and a frontend built with Streamlit.
 
-**Note:**
-the frontend part of this project is still under development.
+![ui-recording.gif](docs/assets/ui-recording.gif)./assets/research-agent.png)
 
 ## Project Structure
 
